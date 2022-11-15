@@ -7,7 +7,7 @@
 //! 
 //! ### Examples
 
-use std::fmt::{Write, Error};
+use std::fmt;
 
 
 /// All Writer-types have some similarities, e.g. adding a line-feed or increment and decrement
@@ -19,7 +19,7 @@ use std::fmt::{Write, Error};
 /// - other useful data for internal usage
 /// This struct is used as a composition in the WriterTypes: HTMLWriter, XMLWriter and JSONWriter
 #[derive(Debug)]
-pub struct NoteSth<'t, W: Write> {
+pub struct NoteSth<'t, W: fmt::Write> {
     /// Drain, thing where text will be written
     drain: &'t mut W,
     /// number of whitespaces one indent-step means
@@ -31,7 +31,7 @@ pub struct NoteSth<'t, W: Write> {
 }
 
 impl<'t, W> NoteSth<'t, W> 
-where W: Write {
+where W: fmt::Write {
     /// New-pattern, creates a new instance of NoteSth, default step-size: 4
     pub fn new(drain: &'t mut W) -> NoteSth<W> {
         NoteSth {
@@ -49,7 +49,7 @@ where W: Write {
     //     self.block_stack.clear();
     // }
 
-    pub fn line_feed(&mut self, n: usize) -> Result<(), Error> {
+    pub fn line_feed(&mut self, n: usize) -> Result<(), fmt::Error> {
         for _i in 0..n {
             self.drain.write_char('\n')?;
         }
@@ -57,13 +57,13 @@ where W: Write {
         Ok(())
     }
 
-    pub fn line_feed_inc(&mut self) -> Result<(), Error> {
+    pub fn line_feed_inc(&mut self) -> Result<(), fmt::Error> {
         self.inc_indent_step();
         self.line_feed(1)?;
         Ok(())
     }
 
-    pub fn line_feed_dec(&mut self) -> Result<(), Error> {
+    pub fn line_feed_dec(&mut self) -> Result<(), fmt::Error> {
         self.dec_indent_step();
         self.line_feed(1)?;
         Ok(())
@@ -83,13 +83,13 @@ where W: Write {
         }
     }
 
-    pub fn open_element(&mut self, opening: &str, closing: &str) -> Result<(), Error> {
+    pub fn open_element(&mut self, opening: &str, closing: &str) -> Result<(), fmt::Error> {
         self.drain.write_str(opening)?;
         self.block_stack.push(String::from(closing));
         Ok(())
     }
 
-    pub fn close_element(&mut self) -> Result<(), Error> {
+    pub fn close_element(&mut self) -> Result<(), fmt::Error> {
         if let Some(closing) = self.block_stack.pop() {
             self.drain.write_str(&closing)?;
             Ok(())
@@ -108,21 +108,29 @@ where W: Write {
 }
 
 
-impl<W> Write for NoteSth<'_, W>
-where W: Write {
-    fn write_str(&mut self, s: &str) -> Result<(), Error> {
+impl<W> fmt::Write for NoteSth<'_, W>
+where W: fmt::Write {
+    fn write_str(&mut self, s: &str) -> Result<(), fmt::Error> {
         self.drain.write_str(s)?;
         Ok(())
     }
 
-    fn write_char(&mut self, c: char) -> Result<(), Error> {
+    fn write_char(&mut self, c: char) -> Result<(), fmt::Error> {
         self.drain.write_char(c)?;
         Ok(())
     }
 
-    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) -> Result<(), Error> {
+    fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> Result<(), fmt::Error> {
         self.drain.write_fmt(args)?;
         Ok(())
+    }
+}
+
+
+impl<W> fmt::Display for NoteSth<'_, W> 
+where W: fmt::Write + fmt::Display {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}", self.drain)
     }
 }
 
@@ -130,10 +138,33 @@ where W: Write {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fmt::Write;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn indent_methods() {
+        let mut content = String::new();
+        let mut note = NoteSth::new(&mut content);
+        assert_eq!(note.indent, "".to_string());
+
+        note.set_indent_step(2);
+        assert_eq!(note.indent, "        ".to_string());
+
+        note.dec_indent_step();
+        assert_eq!(note.indent, "    ".to_string());
+
+        note.inc_indent_step();
+        assert_eq!(note.indent, "        ".to_string());
+
+        note.set_indent_step_size(3);
+        note.set_indent_step(1);
+        assert_eq!(note.indent, "   ");
+    }
+
+    #[test]
+    fn write_trait() {
+        let mut content = String::new();
+        let mut note = NoteSth::new(&mut content);
+        assert!(note.write_str(&"This is a test string".to_string()).is_ok());
+        assert!(note.write_char('\n').is_ok());
     }
 }
