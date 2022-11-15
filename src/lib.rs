@@ -167,4 +167,16 @@ mod tests {
         assert!(note.write_str(&"This is a test string".to_string()).is_ok());
         assert!(note.write_char('\n').is_ok());
     }
+
+    #[test]
+    fn test_element_functionality() {
+        let mut content = String::new();
+        let mut note = NoteSth::new(&mut content);
+        assert!(note.open_element("Begin", "End").is_ok());
+        assert!(note.line_feed_inc().is_ok());
+        assert!(note.write_str("...of a very nice story. And, happy...").is_ok());
+        assert!(note.line_feed_dec().is_ok());
+        assert!(note.close_element().is_ok());
+        assert_eq!(content, String::from("Begin\n    ...of a very nice story. And, happy...\nEnd"));
+    }
 }
