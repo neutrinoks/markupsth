@@ -5,19 +5,65 @@
 //! indenting and adding line-feeds when writing. If you want to generate some kind of code, e.g. HTML,
 //! Rust etc. this is very useful.
 //! 
+//! ### Rust-boundaries
+//! 
+//! At the moment there is only a version available, that implements ```std::fmt::Write```. If requested
+//! a version supporting ```std::io::Write``` could also be implemented. Just contact me.
+//! 
 //! ### Examples
+//! 
+//! To generate the following HTML output:
+//! ```html
+//! <div>
+//!     <p>Some interesting written here</p>
+//! </div>
+//! ```
+//! an implementation would look like:
+//! ```
+//! use notesth::NoteSth;
+//! use std::fmt::{Error, Write};
+//! 
+//! fn main() -> Result<(), Error> {
+//!     let mut text = String::new();
+//!     let mut notes = NoteSth::new(&mut text);
+//!     
+//!     notes.open_element("<div>", "</div>")?;
+//!     notes.line_feed_inc()?;
+//!     notes.open_element("<p>", "</p>")?;
+//!     notes.write_str("Some interesting written here")?;
+//!     notes.close_element()?;
+//!     notes.line_feed_dec()?;
+//!     notes.close_element()?;
+//!     println!("{}", text);
+//!     
+//!     Ok(())
+//! }
+//! ```
+//! 
+//! Another formatted text example:
+//! ```
+//! use notesth::NoteSth;
+//! use std::fmt::{Error, Write};
+//! 
+//! fn main() -> Result<(), Error> {
+//!     let mut text = String::new();
+//!     let mut notes = NoteSth::new(&mut text);
+//!     
+//!     notes.open_element("Begin", "End")?;
+//!     notes.line_feed_inc()?;
+//!     notes.write_str("...of a very nice story. And, happy...")?;
+//!     notes.line_feed_dec()?;
+//!     notes.close_element()?;
+//!     println!("{}", text);
+//!     
+//!     Ok(())
+//! }
+//! ```
 
 use std::fmt;
 
 
-/// All Writer-types have some similarities, e.g. adding a line-feed or increment and decrement
-/// the current indent in the document under edit. That's why all this common functionality is
-/// encapsuled in the NoteSth struct. This struct holds:
-/// - the **content**-String, which holds the markup-content under edit
-/// - the indent_step_size, as a number of whitespaces to be added at current line
-/// - the block_stack, for closing HTML-tags automatically without specifying again which one
-/// - other useful data for internal usage
-/// This struct is used as a composition in the WriterTypes: HTMLWriter, XMLWriter and JSONWriter
+/// This struct implements the purpose of this library for all ```std::fmt::Write``` trait objects, e.g. ```String```
 #[derive(Debug)]
 pub struct NoteSth<'t, W: fmt::Write> {
     /// Drain, thing where text will be written
@@ -49,6 +95,7 @@ where W: fmt::Write {
     //     self.block_stack.clear();
     // }
 
+    /// Adds n-times of line-feeds
     pub fn line_feed(&mut self, n: usize) -> Result<(), fmt::Error> {
         for _i in 0..n {
             self.drain.write_char('\n')?;
@@ -57,22 +104,26 @@ where W: fmt::Write {
         Ok(())
     }
 
+    /// Adds line-feed and increments the indention
     pub fn line_feed_inc(&mut self) -> Result<(), fmt::Error> {
         self.inc_indent_step();
         self.line_feed(1)?;
         Ok(())
     }
 
+    /// Adds a line-feed and decrements the indention
     pub fn line_feed_dec(&mut self) -> Result<(), fmt::Error> {
         self.dec_indent_step();
         self.line_feed(1)?;
         Ok(())
     }
 
+    /// Increases current indention, but does not write anything
     pub fn inc_indent_step(&mut self) {
         self.indent.push_str(" ".repeat(self.indent_step_size).as_str());
     }
 
+    /// Decreases current indention, but does not write anything
     pub fn dec_indent_step(&mut self) {
         let len = self.indent.len();
         if self.indent_step_size > len {
@@ -83,12 +134,14 @@ where W: fmt::Write {
         }
     }
 
+    /// Opens some kind of element, e.g. HTML: "<div>" and pushes the closing element on internal stack
     pub fn open_element(&mut self, opening: &str, closing: &str) -> Result<(), fmt::Error> {
         self.drain.write_str(opening)?;
         self.block_stack.push(String::from(closing));
         Ok(())
     }
 
+    /// Closes the last opened element, e.g. HTML: "</div>". Has to be passed on opening element
     pub fn close_element(&mut self) -> Result<(), fmt::Error> {
         if let Some(closing) = self.block_stack.pop() {
             self.drain.write_str(&closing)?;
@@ -98,10 +151,12 @@ where W: fmt::Write {
         }
     }
 
+    /// Sets a new indention, will be applied after next line-feed
     pub fn set_indent_step(&mut self, indent_step: usize) {
         self.indent = " ".repeat(indent_step * self.indent_step_size);
     }
 
+    /// Sets a new indention-step-size, without modifying anything else
     pub fn set_indent_step_size(&mut self, indent_step_size: usize) {
         self.indent_step_size = indent_step_size;
     }
