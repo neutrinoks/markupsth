@@ -65,7 +65,7 @@ use std::fmt;
 
 /// This struct implements the purpose of this library for all ```std::fmt::Write``` trait objects, e.g. ```String```
 #[derive(Debug)]
-pub struct NoteSth<'t, W: fmt::Write> {
+pub struct NoteSth<'t, W: std::fmt::Write> {
     /// Drain, thing where text will be written
     drain: &'t mut W,
     /// number of whitespaces one indent-step means
@@ -77,7 +77,7 @@ pub struct NoteSth<'t, W: fmt::Write> {
 }
 
 impl<'t, W> NoteSth<'t, W> 
-where W: fmt::Write {
+where W: std::fmt::Write {
     /// New-pattern, creates a new instance of NoteSth, default step-size: 4
     pub fn new(drain: &'t mut W) -> NoteSth<W> {
         NoteSth {
