@@ -60,6 +60,9 @@
 //! }
 //! ```
 
+pub mod config;
+pub mod document;
+
 use std::fmt;
 
 
