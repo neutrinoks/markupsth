@@ -4,24 +4,24 @@
 //!
 //! ### Examples for available configurations
 //!
-//! To use the pre-defined configuration for HTML, pass `MarkupConfig::Html` when creating the
+//! To use the pre-defined configuration for HTML, pass `MarkupLanguage::Html` when creating the
 //! `MarkupSth` struct:
 //!    ```
-//!    use markupsth::{MarkupSth, MarkupConfig};
+//!    use markupsth::{MarkupSth, MarkupLanguage};
 //!
 //!    let mut document = String::new();
-//!    let mut markupsth = MarkupSth::new(&mut document, MarkupConfig::Html).unwrap();
+//!    let mut markupsth = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
 //!    ```
 //!
 //! ### Example for defining your own configuration
 //!
 //! To use an individual configuration for another ML, pass the fully defined `Config` struct via
-//! `MarkupConfig::Other(cfg)`:
+//! `MarkupLanguage::Other(cfg)`:
 //!    ```
-//!    use markupsth::{MarkupSth, MarkupConfig};
-//!    use markupsth::config::{Config, Insertion::*, TagPairConfig, SelfClosingTagConfig};
+//!    use markupsth::{MarkupSth, MarkupLanguage};
+//!    use markupsth::syntax::{SyntaxConfig, Insertion::*, TagPairConfig, SelfClosingTagConfig};
 //!
-//!    let cfg = Config {
+//!    let cfg = SyntaxConfig {
 //!        doctype: None, 
 //!        self_closing: Some(SelfClosingTagConfig {
 //!            before: Single('|'),
@@ -37,7 +37,7 @@
 //!    };
 //!
 //!    let mut document = String::new();
-//!    let mut markupsth = MarkupSth::new(&mut document, MarkupConfig::Other(cfg)).unwrap();
+//!    let mut markupsth = MarkupSth::new(&mut document, MarkupLanguage::Other(cfg)).unwrap();
 //!    ```
 
 use std::fmt;
@@ -113,7 +113,7 @@ pub struct PropertyConfig {
 
 /// Main configuration struct for a full syntax configuration of `MarkupSth`.
 #[derive(Clone, Debug)]
-pub struct Config {
+pub struct SyntaxConfig {
     /// Some optional pre-definitions, e.g. "<?xml version="1.0" encoding="UTF-8"?>.
     pub doctype: Option<String>,
     /// Configuration for self-closing tag elements. When set to `None`, it means there are no tag
@@ -127,17 +127,17 @@ pub struct Config {
     pub properties: Option<PropertyConfig>,
 }
 
-/// Selector for available pre-defined configurations and wrapper for passing your own.
-pub enum MarkupConfig {
+/// Selector for available pre-defined syntax configurations and wrapper for passing your own.
+pub enum MarkupLanguage {
     Html,
     Xml,
-    Other(Config),
+    Other(SyntaxConfig),
 }
 
-impl From<MarkupConfig> for Config {
-    fn from(cfg_sel: MarkupConfig) -> Config {
+impl From<MarkupLanguage> for SyntaxConfig {
+    fn from(cfg_sel: MarkupLanguage) -> SyntaxConfig {
         match cfg_sel {
-            MarkupConfig::Html => Config {
+            MarkupLanguage::Html => SyntaxConfig {
                 doctype: Some(r#"<!DOCTYPE html>"#.to_string()),
                 self_closing: Some(SelfClosingTagConfig {
                     before: Single('<'),
@@ -159,7 +159,7 @@ impl From<MarkupConfig> for Config {
                     value_separator: Single(' '),
                 }),
             },
-            MarkupConfig::Xml => Config {
+            MarkupLanguage::Xml => SyntaxConfig {
                 doctype: Some(r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string()),
                 self_closing: Some(SelfClosingTagConfig {
                     before: Single('<'),
@@ -181,7 +181,7 @@ impl From<MarkupConfig> for Config {
                     value_separator: Single(' '),
                 }),
             },
-            MarkupConfig::Other(cfg) => cfg,
+            MarkupLanguage::Other(cfg) => cfg,
         }
     }
 }
@@ -192,9 +192,9 @@ mod tests {
 
     #[test]
     fn config_selector_smoke_test() {
-        let _ = Config::from(MarkupConfig::Html);
-        let cfg = Config::from(MarkupConfig::Xml);
-        let _ = Config::from(MarkupConfig::Other(cfg));
+        let _ = SyntaxConfig::from(MarkupLanguage::Html);
+        let cfg = SyntaxConfig::from(MarkupLanguage::Xml);
+        let _ = SyntaxConfig::from(MarkupLanguage::Other(cfg));
     }
 
     #[test]

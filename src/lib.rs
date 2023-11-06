@@ -60,10 +60,10 @@
 //! }
 //! ```
 
-pub mod config;
+pub mod syntax;
 pub mod markupsth;
 
-pub use crate::{config::MarkupConfig, markupsth::MarkupSth};
+pub use crate::{syntax::MarkupLanguage, markupsth::MarkupSth};
 
 
 #[cfg(test)]

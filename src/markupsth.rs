@@ -1,6 +1,6 @@
 //!
 
-use crate::config::{Config, MarkupConfig};
+use crate::syntax::{SyntaxConfig, MarkupLanguage};
 use std::fmt::Write;
 
 /// Result definition.
@@ -26,9 +26,11 @@ enum State {
 #[derive(Debug)]
 pub struct MarkupSth<'r> {
     /// Configuration of MarkupSth.
-    pub config: Config,
+    pub syntax: SyntaxConfig,
     /// Stack of open tags.
     stack: Vec<String>,
+    /// Simple optimization.
+    indent_str: String,
     /// Internal state of the printer.
     state: State,
     /// Reference to a Document.
@@ -37,10 +39,11 @@ pub struct MarkupSth<'r> {
 
 impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
-    pub fn new(document: &'d mut String, cfg: MarkupConfig) -> Result<MarkupSth<'d>> {
+    pub fn new(document: &'d mut String, cfg: MarkupLanguage) -> Result<MarkupSth<'d>> {
         let mut printer = MarkupSth {
-            config: Config::from(cfg),
+            syntax: SyntaxConfig::from(cfg),
             stack: Vec::new(),
+            indent_str: String::new(),
             state: State::Initial,
             document,
         };
@@ -51,32 +54,32 @@ impl<'d> MarkupSth<'d> {
     /// Inserts a single tag.
     pub fn self_closing_tag(&mut self, tag: &str) -> Result<()> {
         self.finalize_last_op()?;
-        if let Some(cfg) = &self.config.self_closing {
+        if let Some(cfg) = &self.syntax.self_closing {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.before, tag))?;
             self.state = State::SelfClosing;
             Ok(())
         } else {
-            Err("MarkupSth: in this configuration are no self-closing tag elements allowed".into())
+            Err("MarkupSth: in this syntaxuration are no self-closing tag elements allowed".into())
         }
     }
 
     pub fn open_tag(&mut self, tag: &str) -> Result<()> {
         self.finalize_last_op()?;
-        if let Some(cfg) = &self.config.tag_pairs {
+        if let Some(cfg) = &self.syntax.tag_pairs {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.opener_before, tag))?;
             self.stack.push(tag.to_string());
             self.state = State::Opening;
             Ok(())
         } else {
-            Err("MarkupSth: in this configuration are no tag-pair element allowed".into())
+            Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into())
         }
     }
 
     pub fn close_tag(&mut self) -> Result<()> {
         self.finalize_last_op()?;
-        if let Some(cfg) = &self.config.tag_pairs {
+        if let Some(cfg) = &self.syntax.tag_pairs {
             if let Some(tag) = self.stack.pop() {
                 self.document
                     .write_fmt(format_args!("{}{}", cfg.closer_before, tag))?;
@@ -86,7 +89,7 @@ impl<'d> MarkupSth<'d> {
                 Err("MarkupSth: tag-pair stack error".into())
             }
         } else {
-            Err("MarkupSth: in this configuration are no tag-pair element allowed".into())
+            Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into())
         }
     }
 
@@ -98,7 +101,7 @@ impl<'d> MarkupSth<'d> {
             );
         }
 
-        if let Some(cfg) = &self.config.properties {
+        if let Some(cfg) = &self.syntax.properties {
             self.document.write_fmt(format_args!("{}", cfg.initiator))?;
             let len = properties.len();
             for property in properties[..len - 1].iter() {
@@ -113,7 +116,7 @@ impl<'d> MarkupSth<'d> {
             ))?;
             Ok(())
         } else {
-            Err("MarkupSth: in this configuration are no properties in tag elements allowed".into())
+            Err("MarkupSth: in this syntaxuration are no properties in tag elements allowed".into())
         }
     }
 
@@ -124,24 +127,28 @@ impl<'d> MarkupSth<'d> {
         Ok(())
     }
 
+    pub fn new_line(&mut self) -> Result<()> {
+        Ok(self.document.write_fmt(format_args!("\n{}", self.indent_str))?)
+    }
+
     pub fn finalize(self) -> Result<()> {
         match self.state {
             State::SelfClosing => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.self_closing.as_ref().unwrap().after
+                    self.syntax.self_closing.as_ref().unwrap().after
                 ))?;
             }
             State::Opening => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.tag_pairs.as_ref().unwrap().opener_after
+                    self.syntax.tag_pairs.as_ref().unwrap().opener_after
                 ))?;
             }
             State::Closing => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.tag_pairs.as_ref().unwrap().closer_after
+                    self.syntax.tag_pairs.as_ref().unwrap().closer_after
                 ))?;
             }
             _ => {}
@@ -157,19 +164,19 @@ impl<'d> MarkupSth<'d> {
             State::SelfClosing => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.self_closing.as_ref().unwrap().after
+                    self.syntax.self_closing.as_ref().unwrap().after
                 ))?;
             }
             State::Opening => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.tag_pairs.as_ref().unwrap().opener_after
+                    self.syntax.tag_pairs.as_ref().unwrap().opener_after
                 ))?;
             }
             State::Closing => {
                 self.document.write_fmt(format_args!(
                     "{}",
-                    self.config.tag_pairs.as_ref().unwrap().closer_after
+                    self.syntax.tag_pairs.as_ref().unwrap().closer_after
                 ))?;
             }
             State::DocType | State::Text => {}
@@ -179,7 +186,7 @@ impl<'d> MarkupSth<'d> {
 
     fn insert_doctype(&mut self) -> Result<()> {
         assert!(self.state == State::Initial);
-        if let Some(def) = &self.config.doctype {
+        if let Some(def) = &self.syntax.doctype {
             self.document.write_str(def)?;
         }
         self.state = State::DocType;
@@ -194,7 +201,7 @@ mod tests {
     #[test]
     fn simple_html() {
         let mut document = String::new();
-        let mut printer = MarkupSth::new(&mut document, MarkupConfig::Html).expect("MarkupSth::new()");
+        let mut printer = MarkupSth::new(&mut document, MarkupLanguage::Html).expect("MarkupSth::new()");
         printer.open_tag("html").expect(r#"opening("html")"#);
         printer.text("Dies ist HTML").expect("content");
         printer.close_tag().expect("close_tag");
