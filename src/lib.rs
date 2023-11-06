@@ -19,46 +19,8 @@
 //! </div>
 //! ```
 //! an implementation would look like:
-//! ```
-//! use notesth::MarkupSth;
-//! use std::fmt::{Error, Write};
-//!
-//! fn main() -> Result<(), Error> {
-//!     let mut text = String::new();
-//!     let mut notes = MarkupSth::new(&mut text);
-//!     
-//!     notes.open_element("<div>", "</div>")?;
-//!     notes.line_feed_inc()?;
-//!     notes.open_element("<p>", "</p>")?;
-//!     notes.write_str("Some interesting written here")?;
-//!     notes.close_element()?;
-//!     notes.line_feed_dec()?;
-//!     notes.close_element()?;
-//!     println!("{}", text);
-//!     
-//!     Ok(())
-//! }
-//! ```
 //!
 //! Another formatted text example:
-//! ```
-//! use notesth::MarkupSth;
-//! use std::fmt::{Error, Write};
-//!
-//! fn main() -> Result<(), Error> {
-//!     let mut text = String::new();
-//!     let mut notes = MarkupSth::new(&mut text);
-//!     
-//!     notes.open_element("Begin", "End")?;
-//!     notes.line_feed_inc()?;
-//!     notes.write_str("...of a very nice story. And, happy...")?;
-//!     notes.line_feed_dec()?;
-//!     notes.close_element()?;
-//!     println!("{}", text);
-//!     
-//!     Ok(())
-//! }
-//! ```
 
 pub mod formatting;
 pub mod markupsth;
@@ -67,48 +29,17 @@ pub mod tagpattern;
 
 pub use crate::{markupsth::MarkupSth, syntax::MarkupLanguage};
 
-#[cfg(test)]
-mod tests {
+// #[cfg(test)]
+// mod tests {
     // use super::*;
-    // use std::fmt::Write;
 
     // #[test]
-    // fn indent_methods() {
-    //     let mut content = String::new();
-    //     let mut note = MarkupSth::new(&mut content);
-    //     assert_eq!(note.indent, "".to_string());
-
-    //     note.set_indent_step(2);
-    //     assert_eq!(note.indent, "        ".to_string());
-
-    //     note.dec_indent_step();
-    //     assert_eq!(note.indent, "    ".to_string());
-
-    //     note.inc_indent_step();
-    //     assert_eq!(note.indent, "        ".to_string());
-
-    //     note.set_indent_step_size(3);
-    //     note.set_indent_step(1);
-    //     assert_eq!(note.indent, "   ");
+    // fn html() {
+    //     todo!();
     // }
 
     // #[test]
-    // fn write_trait() {
-    //     let mut content = String::new();
-    //     let mut note = MarkupSth::new(&mut content);
-    //     assert!(note.write_str(&"This is a test string".to_string()).is_ok());
-    //     assert!(note.write_char('\n').is_ok());
+    // fn xml() {
+    //     todo!();
     // }
-
-    // #[test]
-    // fn test_element_functionality() {
-    //     let mut content = String::new();
-    //     let mut note = MarkupSth::new(&mut content);
-    //     assert!(note.open_element("Begin", "End").is_ok());
-    //     assert!(note.line_feed_inc().is_ok());
-    //     assert!(note.write_str("...of a very nice story. And, happy...").is_ok());
-    //     assert!(note.line_feed_dec().is_ok());
-    //     assert!(note.close_element().is_ok());
-    //     assert_eq!(content, String::from("Begin\n    ...of a very nice story. And, happy...\nEnd"));
-    // }
-}
+// }

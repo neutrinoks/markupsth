@@ -1,8 +1,9 @@
 //!
 
 use crate::{
-    formatting::{Formatting, LanguageFormatting},
+    formatting::{FormatChanges, Formatting, LanguageFormatting},
     syntax::{MarkupLanguage, SyntaxConfig},
+    tagpattern::TagPattern,
 };
 use std::fmt::Write;
 
@@ -14,8 +15,6 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 enum State {
     /// Initial state, no operations so far.
     Initial,
-    /// Doctype have been inserted last.
-    DocType,
     /// A self-clsoing tag was inserted last.
     SelfClosing,
     /// A opening tag was inserted last.
@@ -38,6 +37,8 @@ pub struct MarkupSth<'r> {
     indent_str: String,
     /// Internal state of the markup.
     state: State,
+    /// Internal log of the last tag to connect to Formatting.
+    log: String,
     /// Reference to a Document.
     document: &'r mut String,
 }
@@ -63,21 +64,21 @@ macro_rules! final_op_arm {
         ))?;
     }};
 }
+
 pub(crate) use final_op_arm;
 
 impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
     pub fn new(document: &'d mut String, cfg: MarkupLanguage) -> Result<MarkupSth<'d>> {
-        let mut markup = MarkupSth {
+        Ok(MarkupSth {
             syntax: SyntaxConfig::from(cfg.clone()),
             formatting: Formatting::from(cfg),
             stack: Vec::new(),
             indent_str: String::new(),
             state: State::Initial,
+            log: String::new(),
             document,
-        };
-        markup.insert_doctype()?;
-        Ok(markup)
+        })
     }
 
     pub fn set_formatting(&mut self, f: LanguageFormatting) {
@@ -91,6 +92,7 @@ impl<'d> MarkupSth<'d> {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.before, tag))?;
             self.state = State::SelfClosing;
+            self.log = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no self-closing tag elements allowed".into())
@@ -104,6 +106,7 @@ impl<'d> MarkupSth<'d> {
                 .write_fmt(format_args!("{}{}", cfg.opener_before, tag))?;
             self.stack.push(tag.to_string());
             self.state = State::Opening;
+            self.log = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into())
@@ -115,8 +118,9 @@ impl<'d> MarkupSth<'d> {
         if let Some(cfg) = &self.syntax.tag_pairs {
             if let Some(tag) = self.stack.pop() {
                 self.document
-                    .write_fmt(format_args!("{}{}", cfg.closer_before, tag))?;
+                    .write_fmt(format_args!("{}{}", cfg.closer_before, &tag))?;
                 self.state = State::Closing;
+                self.log = tag;
                 Ok(())
             } else {
                 Err("MarkupSth: tag-pair stack error".into())
@@ -175,13 +179,13 @@ impl<'d> MarkupSth<'d> {
     }
 
     pub fn new_line(&mut self) -> Result<()> {
-        Ok(self
-            .document
-            .write_fmt(format_args!("\n{}", self.indent_str))?)
+        self.finalize_last_op()?;
+        self.document.write_fmt(format_args!("\n{}", self.indent_str))?;
+        self.state = State::Text;
+        Ok(())
     }
 
     pub fn close_all(&mut self) -> Result<()> {
-        println!("{:?}", self.stack);
         for _ in 0..self.stack.len() {
             self.close()?;
         }
@@ -199,24 +203,47 @@ impl<'d> MarkupSth<'d> {
     }
 
     fn finalize_last_op(&mut self) -> Result<()> {
-        match self.state {
+        let indent = self.indent_str.len();
+        let changes = match self.state {
             State::Initial => {
-                panic!("MarkupSth: in Initial state there is nothing to be finalized")
+                println!("Initial");
+                if let Some(dt) = self.syntax.doctype.as_ref() {
+                    self.document.write_str(dt)?;
+                    self.state = State::Text; // because nothing happens
+                    FormatChanges::may_lf(self.formatting.doctype_lf)
+                } else {
+                    return Ok(())
+                }
             }
-            State::SelfClosing => final_op_arm!(selfclosing self),
-            State::Opening => final_op_arm!(opening self),
-            State::Closing => final_op_arm!(closing self),
-            State::DocType | State::Text => {}
+            State::SelfClosing => {
+                println!("SelfClosing");
+                final_op_arm!(selfclosing self);
+                self.formatting
+                    .new_format(&TagPattern::self_closing(&self.log), indent)
+            }
+            State::Opening => {
+                println!("Opening");
+                final_op_arm!(opening self);
+                self.formatting
+                    .new_format(&TagPattern::opening(&self.log), indent)
+            }
+            State::Closing => {
+                println!("Closing");
+                final_op_arm!(closing self);
+                self.formatting
+                    .new_format(&TagPattern::closing(&self.log), indent)
+            }
+            State::Text => {
+                println!("Text");
+                return Ok(())
+            }
+        };
+        if let Some(indent) = changes.new_indent {
+            self.indent_str = " ".repeat(indent);
         }
-        Ok(())
-    }
-
-    fn insert_doctype(&mut self) -> Result<()> {
-        assert!(self.state == State::Initial);
-        if let Some(def) = &self.syntax.doctype {
-            self.document.write_str(def)?;
+        if changes.new_line {
+            self.new_line()?;
         }
-        self.state = State::DocType;
         Ok(())
     }
 }
@@ -263,10 +290,54 @@ mod tests {
         markup.finalize().unwrap();
         assert_eq!(
             document,
-            r#"<!DOCTYPE html><body><section class="class"><div keya="value1" keyb="value2">Text<img src="img.jpg"></div></section></body>"#
+            concat![r#"<!DOCTYPE html><body><section class="class">"#,
+                r#"<div keya="value1" keyb="value2">"#,
+                r#"Text<img src="img.jpg"></div></section></body>"#]
         );
     }
 
     #[test]
-    fn formatted_html() {}
+    fn default_html_formatting() {
+        let mut document = String::new();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        println!("before open");
+        markup.open("head").unwrap();
+        markup.self_closing("meta").unwrap();
+        println!("before new line");
+        markup.new_line().unwrap();
+        markup.properties(&properties!["charset", "utf-8"]).unwrap();
+        markup.close().unwrap();
+        println!("MARK 0");
+        markup.open("body").unwrap();
+        println!("MARK 1");
+        markup.open("section").unwrap();
+        println!("MARK 2");
+        markup.open("div").unwrap();
+        println!("MARK 3");
+        markup.open("p").unwrap();
+        println!("MARK 4");
+        markup.text("Text").unwrap();
+        markup.close().unwrap();
+        println!("MARK 3");
+        markup.close().unwrap();
+        println!("MARK 2");
+        markup.close().unwrap();
+        println!("MARK 1");
+        markup.close().unwrap();
+        println!("MARK 0");
+        // markup.close_all().unwrap();
+        assert_eq!(
+            document,
+            concat![
+                r#"<!DOCTYPE html>"#, '\n',
+                r#"<head>"#, '\n',
+                r#"    <meta charset="utf-8">"#, '\n',
+                r#"</head>"#, '\n',
+                r#"<body>"#, '\n',
+                r#"    <section>"#, '\n',
+                r#"        <div><p>Text</p></div>"#, '\n',
+                r#"    </section>"#, '\n',
+                r#"</body>"#, '\n']
+        );
+    }
 }

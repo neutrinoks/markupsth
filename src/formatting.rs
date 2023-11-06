@@ -35,11 +35,24 @@ pub struct FormatChanges {
     pub new_indent: Option<usize>,
 }
 
+impl FormatChanges {
+    /// A simple situation, where nothing shall be changed, but also not a default situation.
+    pub fn nothing() -> FormatChanges {
+        FormatChanges{ new_line: false, new_indent: None }
+    }
+
+    pub fn may_lf(new_line: bool) -> FormatChanges {
+        FormatChanges{ new_line, new_indent: None }
+    }
+}
+
 /// Main configuration struct for formatting in `MarkupSth`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Formatting {
     /// Step size of indenting.
     pub indent_step: usize,
+    /// New line after doctype information.
+    pub doctype_lf: bool,
     /// Flag for automatic line feed.
     pub auto_lf: bool,
     /// Pattern setup for auto-line-feed.
@@ -74,8 +87,16 @@ impl Formatting {
             for pat in self.auto_indent_pat.iter() {
                 if pat == tag {
                     match tag.typ {
-                        TagType::Closing => return Some(indent - self.indent_step),
-                        TagType::Opening => return Some(indent + self.indent_step),
+                        TagType::Closing => {
+                            if self.indent_step > indent {
+                                return Some(0)
+                            } else {
+                                return Some(indent - self.indent_step)
+                            }
+                        }
+                        TagType::Opening => {
+                            return Some(indent + self.indent_step)
+                        }
                         _ => {}
                     }
                 }
@@ -96,6 +117,7 @@ impl From<LanguageFormatting> for Formatting {
         match formatting {
             LanguageFormatting::NoFormatting => Formatting {
                 indent_step: 4,
+                doctype_lf: false,
                 auto_lf: false,
                 auto_lf_pat: Vec::new(),
                 auto_indenting: false,
@@ -103,6 +125,7 @@ impl From<LanguageFormatting> for Formatting {
             },
             LanguageFormatting::CleanHtml => Formatting {
                 indent_step: 4,
+                doctype_lf: true,
                 auto_lf: true,
                 auto_lf_pat: tag_rule_set![
                     on_open "html", on_both "head", on_both "head", on_both "body",

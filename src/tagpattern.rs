@@ -65,7 +65,7 @@ macro_rules! tag_rule_set_internal {
 macro_rules! tag_rule_set {
     ($($rule:tt $ident:literal),*) => {
         {
-            let mut v: Vec<crate::tagpattern::TagPattern> = Vec::new();
+            let mut v: Vec<$crate::tagpattern::TagPattern> = Vec::new();
             $($crate::tag_rule_set_internal!($rule $ident v);)*
             v
         }
