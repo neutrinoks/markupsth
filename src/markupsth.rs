@@ -194,12 +194,11 @@ mod tests {
     #[test]
     fn simple_html() {
         let mut document = String::new();
-        let mut printer = MarkupSth::new(&mut document, MarkupConfig::Html)
-            .expect("MarkupSth::new() fail");
-        printer.open_tag("html").expect(r#"opening("html") fail"#);
-        printer.text("Dies ist HTML").expect(r#"content fail"#);
-        printer.close_tag();
-        printer.finalize();
+        let mut printer = MarkupSth::new(&mut document, MarkupConfig::Html).expect("MarkupSth::new()");
+        printer.open_tag("html").expect(r#"opening("html")"#);
+        printer.text("Dies ist HTML").expect("content");
+        printer.close_tag().expect("close_tag");
+        printer.finalize().expect("finalize");
         assert_eq!(document, "<!DOCTYPE html><html>Dies ist HTML</html>");
     }
 }

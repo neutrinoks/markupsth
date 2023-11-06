@@ -1,16 +1,56 @@
-//! This module implements possible configuration functionality of markupsth.
+//! This module implements the syntax configuration of any kind of Markup Language within markupsth.
+//! There are currently pre-defined configurations for HTML and XML available, but also the
+//! possibility to individually define your own configuration for another ML. 
+//!
+//! ### Examples for available configurations
+//!
+//! To use the pre-defined configuration for HTML, pass `MarkupConfig::Html` when creating the
+//! `MarkupSth` struct:
+//!    ```
+//!    use markupsth::{MarkupSth, MarkupConfig};
+//!
+//!    let mut document = String::new();
+//!    let mut markupsth = MarkupSth::new(&mut document, MarkupConfig::Html).unwrap();
+//!    ```
+//!
+//! ### Example for defining your own configuration
+//!
+//! To use an individual configuration for another ML, pass the fully defined `Config` struct via
+//! `MarkupConfig::Other(cfg)`:
+//!    ```
+//!    use markupsth::{MarkupSth, MarkupConfig};
+//!    use markupsth::config::{Config, Insertion::*, TagPairConfig, SelfClosingTagConfig};
+//!
+//!    let cfg = Config {
+//!        doctype: None, 
+//!        self_closing: Some(SelfClosingTagConfig {
+//!            before: Single('|'),
+//!            after: Single('|'),
+//!        }),
+//!        tag_pairs: Some(TagPairConfig {
+//!            opener_before: Single('|'),
+//!            opener_after: Single('|'),
+//!            closer_before: Double('|', '!'),
+//!            closer_after: Single('|'),
+//!        }),
+//!        properties: None,
+//!    };
+//!
+//!    let mut document = String::new();
+//!    let mut markupsth = MarkupSth::new(&mut document, MarkupConfig::Other(cfg)).unwrap();
+//!    ```
 
 use std::fmt;
 use Insertion::*;
 
-/// Possible type auf automatic insertions. An insertion can be none, single or multiple
-/// characters. For example in HTML and XML, every tag will be openend by a single character '<'
-/// and closed by either a single character '>' or maybe by two "/>". This different setups can be
-/// defined this enumeration type.
+/// Possible type auf automatic insertions. There can be nothing to be inserted, a single or 
+/// multiple characters. For example in HTML and XML, every tag will be openend by a single 
+/// character `<` and closed by either a single character `>` or maybe by two `/>`. This different 
+/// setups can be defined this enumeration type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Insertion {
     /// No character.
-    None,
+    Nothing,
     /// A single character.
     Single(char),
     /// Two characters.
@@ -22,7 +62,7 @@ pub enum Insertion {
 impl fmt::Display for Insertion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
         match self {
-            None => Ok(()),
+            Nothing => Ok(()),
             Single(c) => write!(f, "{}", c),
             Double(c1, c2) => write!(f, "{}{}", c1, c2),
             Triple(c1, c2, c3) => write!(f, "{}{}{}", c1, c2, c3),
@@ -30,7 +70,7 @@ impl fmt::Display for Insertion {
     }
 }
 
-/// Configuration of a self-closing tag element, e.g. in HTML "<img>".
+/// Configuration of a self-closing tag element, e.g. in HTML `<img>`.
 #[derive(Clone, Debug)]
 pub struct SelfClosingTagConfig {
     /// Optional character to be set before a single tag name (opening character).
@@ -39,7 +79,7 @@ pub struct SelfClosingTagConfig {
     pub after: Insertion,
 }
 
-/// Configuration of a tag-pair element, e.g. HTML "<p></p>".
+/// Configuration of a tag-pair element, e.g. HTML `<p></p>`.
 #[derive(Clone, Debug)]
 pub struct TagPairConfig {
     /// Insertion before the opening tag element identifier.
@@ -52,7 +92,7 @@ pub struct TagPairConfig {
     pub closer_after: Insertion,
 }
 
-/// Configuration for properties of tag elements.
+/// Configuration for additional properties of tag elements.
 #[derive(Clone, Debug)]
 pub struct PropertyConfig {
     /// Initiator, character to be inserted between a tag identifier and the first property.
@@ -71,7 +111,7 @@ pub struct PropertyConfig {
     pub value_separator: Insertion,
 }
 
-/// Main configuration struct for a full setup of markupsth.
+/// Main configuration struct for a full syntax configuration of `MarkupSth`.
 #[derive(Clone, Debug)]
 pub struct Config {
     /// Some optional pre-definitions, e.g. "<?xml version="1.0" encoding="UTF-8"?>.
@@ -87,7 +127,7 @@ pub struct Config {
     pub properties: Option<PropertyConfig>,
 }
 
-/// Selector for available pre-defined configurations.
+/// Selector for available pre-defined configurations and wrapper for passing your own.
 pub enum MarkupConfig {
     Html,
     Xml,
@@ -111,8 +151,8 @@ impl From<MarkupConfig> for Config {
                 }),
                 properties: Some(PropertyConfig {
                     initiator: Single(' '),
-                    name_before: None,
-                    name_after: None,
+                    name_before: Nothing,
+                    name_after: Nothing,
                     value_before: Single('\"'),
                     value_after: Single('\"'),
                     name_separator: Single('='),
@@ -133,8 +173,8 @@ impl From<MarkupConfig> for Config {
                 }),
                 properties: Some(PropertyConfig {
                     initiator: Single(' '),
-                    name_before: None,
-                    name_after: None,
+                    name_before: Nothing,
+                    name_after: Nothing,
                     value_before: Single('\"'),
                     value_after: Single('\"'),
                     name_separator: Single('='),
@@ -159,7 +199,7 @@ mod tests {
 
     #[test]
     fn insertion_to_string() {
-        assert_eq!(None.to_string(), "".to_string());
+        assert_eq!(Nothing.to_string(), "".to_string());
         assert_eq!(Single('<').to_string(), "<".to_string());
         assert_eq!(Double('/', '>').to_string(), "/>".to_string());
         assert_eq!(Triple(' ', '/', '>').to_string(), " />".to_string());
