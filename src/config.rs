@@ -1,6 +1,13 @@
 //! This module implements possible configuration functionality of markupsth.
 
-#[derive(Clone, Debug, PartialEq)]
+use std::fmt;
+use Insertion::*;
+
+/// Possible type auf automatic insertions. An insertion can be none, single or multiple
+/// characters. For example in HTML and XML, every tag will be openend by a single character '<'
+/// and closed by either a single character '>' or maybe by two "/>". This different setups can be
+/// defined this enumeration type.
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Insertion {
     /// No character.
     None,
@@ -8,60 +15,153 @@ pub enum Insertion {
     Single(char),
     /// Two characters.
     Double(char, char),
+    /// Three characters.
+    Triple(char, char, char),
 }
 
-/// Configuration of a single tag element, e.g. in HTML <img>.
+impl fmt::Display for Insertion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
+        match self {
+            None => Ok(()),
+            Single(c) => write!(f, "{}", c),
+            Double(c1, c2) => write!(f, "{}{}", c1, c2),
+            Triple(c1, c2, c3) => write!(f, "{}{}{}", c1, c2, c3),
+        }
+    }
+}
+
+/// Configuration of a self-closing tag element, e.g. in HTML "<img>".
 #[derive(Clone, Debug)]
-pub struct SingleTagConfig {
+pub struct SelfClosingTagConfig {
     /// Optional character to be set before a single tag name (opening character).
-    before: Insertion,
+    pub before: Insertion,
     /// Optional character to be set after a single tag (closing character).
-    after: Insertion,
-    // TODO: Optional operations to be done after closing a single tag ???
+    pub after: Insertion,
 }
 
-/// Configuration of a tag-pair element, e.g. HTML <p></p>.
+/// Configuration of a tag-pair element, e.g. HTML "<p></p>".
 #[derive(Clone, Debug)]
 pub struct TagPairConfig {
     /// Insertion before the opening tag element identifier.
-    opener_before: Insertion,
+    pub opener_before: Insertion,
     /// Inseration after the opening tag element.
-    opener_after: Insertion,
+    pub opener_after: Insertion,
     /// Inseration before the closing tag element identifier.
-    closer_before: Insertion,
+    pub closer_before: Insertion,
     /// Insertion after the closing tag element.
-    closer_after: Insertion,
+    pub closer_after: Insertion,
 }
 
 /// Configuration for properties of tag elements.
 #[derive(Clone, Debug)]
 pub struct PropertyConfig {
-    name_before: Insertion,
-    name_after: Insertion,
-    value_before: Insertion,
-    value_after: Insertion,
-    separator: Insertion,
-    space: bool
+    /// Initiator, character to be inserted between a tag identifier and the first property.
+    pub initiator: Insertion,
+    /// Insertions before a property name identifier.
+    pub name_before: Insertion,
+    /// Insertions after a property name identifier.
+    pub name_after: Insertion,
+    /// Insertions before a property value.
+    pub value_before: Insertion,
+    /// Insertions after a property value.
+    pub value_after: Insertion,
+    /// Seperator between property name and property value.
+    pub name_separator: Insertion,
+    /// Separator between multiple properties.
+    pub value_separator: Insertion,
 }
 
 /// Main configuration struct for a full setup of markupsth.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Configuration for single tag elements.
-    single_tags: SingleTagConfig,
-    /// Configuration for tag pair elements.
-    tag_pairs: TagPairConfig,
-    /// Configuration of properties of tag elements.
-    properties: PropertyConfig, 
+    /// Some optional pre-definitions, e.g. "<?xml version="1.0" encoding="UTF-8"?>.
+    pub doctype: Option<String>,
+    /// Configuration for self-closing tag elements. When set to `None`, it means there are no tag
+    /// pairs available in the Markup language.
+    pub self_closing: Option<SelfClosingTagConfig>,
+    /// Configuration for tag pair elements. When set to `None`, it means there are no tag pairs
+    /// available in the Markup language.
+    pub tag_pairs: Option<TagPairConfig>,
+    /// Configuration of properties of tag elements. When set to `None`, it means there are no tag
+    /// properties available in the Markup language.
+    pub properties: Option<PropertyConfig>,
 }
 
+/// Selector for available pre-defined configurations.
+pub enum MarkupConfig {
+    Html,
+    Xml,
+    Other(Config),
+}
+
+impl From<MarkupConfig> for Config {
+    fn from(cfg_sel: MarkupConfig) -> Config {
+        match cfg_sel {
+            MarkupConfig::Html => Config {
+                doctype: Some(r#"<!DOCTYPE html>"#.to_string()),
+                self_closing: Some(SelfClosingTagConfig {
+                    before: Single('<'),
+                    after: Single('>'),
+                }),
+                tag_pairs: Some(TagPairConfig {
+                    opener_before: Single('<'),
+                    opener_after: Single('>'),
+                    closer_before: Double('<', '/'),
+                    closer_after: Single('>'),
+                }),
+                properties: Some(PropertyConfig {
+                    initiator: Single(' '),
+                    name_before: None,
+                    name_after: None,
+                    value_before: Single('\"'),
+                    value_after: Single('\"'),
+                    name_separator: Single('='),
+                    value_separator: Single(' '),
+                }),
+            },
+            MarkupConfig::Xml => Config {
+                doctype: Some(r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string()),
+                self_closing: Some(SelfClosingTagConfig {
+                    before: Single('<'),
+                    after: Triple(' ', '/', '>'),
+                }),
+                tag_pairs: Some(TagPairConfig {
+                    opener_before: Single('<'),
+                    opener_after: Single('>'),
+                    closer_before: Double('<', '/'),
+                    closer_after: Single('>'),
+                }),
+                properties: Some(PropertyConfig {
+                    initiator: Single(' '),
+                    name_before: None,
+                    name_after: None,
+                    value_before: Single('\"'),
+                    value_after: Single('\"'),
+                    name_separator: Single('='),
+                    value_separator: Single(' '),
+                }),
+            },
+            MarkupConfig::Other(cfg) => cfg,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn something() {
-        todo!();
+    fn config_selector_smoke_test() {
+        let _ = Config::from(MarkupConfig::Html);
+        let cfg = Config::from(MarkupConfig::Xml);
+        let _ = Config::from(MarkupConfig::Other(cfg));
+    }
+
+    #[test]
+    fn insertion_to_string() {
+        assert_eq!(None.to_string(), "".to_string());
+        assert_eq!(Single('<').to_string(), "<".to_string());
+        assert_eq!(Double('/', '>').to_string(), "/>".to_string());
+        assert_eq!(Triple(' ', '/', '>').to_string(), " />".to_string());
     }
 }
