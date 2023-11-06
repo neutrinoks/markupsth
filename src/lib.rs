@@ -60,11 +60,12 @@
 //! }
 //! ```
 
-pub mod syntax;
+pub mod formatting;
 pub mod markupsth;
+pub mod syntax;
+pub mod tagpattern;
 
-pub use crate::{syntax::MarkupLanguage, markupsth::MarkupSth};
-
+pub use crate::{markupsth::MarkupSth, syntax::MarkupLanguage};
 
 #[cfg(test)]
 mod tests {

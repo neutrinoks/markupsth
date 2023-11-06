@@ -1,6 +1,6 @@
 //! This module implements the syntax configuration of any kind of Markup Language within markupsth.
 //! There are currently pre-defined configurations for HTML and XML available, but also the
-//! possibility to individually define your own configuration for another ML. 
+//! possibility to individually define your own configuration for another ML.
 //!
 //! ### Examples for available configurations
 //!
@@ -22,7 +22,7 @@
 //!    use markupsth::syntax::{SyntaxConfig, Insertion::*, TagPairConfig, SelfClosingTagConfig};
 //!
 //!    let cfg = SyntaxConfig {
-//!        doctype: None, 
+//!        doctype: None,
 //!        self_closing: Some(SelfClosingTagConfig {
 //!            before: Single('|'),
 //!            after: Single('|'),
@@ -43,9 +43,9 @@
 use std::fmt;
 use Insertion::*;
 
-/// Possible type auf automatic insertions. There can be nothing to be inserted, a single or 
-/// multiple characters. For example in HTML and XML, every tag will be openend by a single 
-/// character `<` and closed by either a single character `>` or maybe by two `/>`. This different 
+/// Possible type auf automatic insertions. There can be nothing to be inserted, a single or
+/// multiple characters. For example in HTML and XML, every tag will be openend by a single
+/// character `<` and closed by either a single character `>` or maybe by two `/>`. This different
 /// setups can be defined this enumeration type.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Insertion {
@@ -128,6 +128,7 @@ pub struct SyntaxConfig {
 }
 
 /// Selector for available pre-defined syntax configurations and wrapper for passing your own.
+#[derive(Clone, Debug)]
 pub enum MarkupLanguage {
     Html,
     Xml,
