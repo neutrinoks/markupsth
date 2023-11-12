@@ -29,18 +29,23 @@ impl From<MarkupLanguage> for LanguageFormatting {
 
 #[derive(Clone, Debug)]
 pub struct FormatChanges {
-    /// Is line-feed required?
+    /// Shall a new line (line feed) be inserted after inserting certain tag elements.
     pub new_line: bool,
-    /// Need indenting to be updated?
+    /// Need indenting to be updated, and if yes, what is the new indenting and has it to be
+    /// applied before inserting a tag element. For example in case of closing tag elements the
+    /// indenting may be changed before.
     pub new_indent: Option<usize>,
 }
 
 impl FormatChanges {
-    /// A simple situation, where nothing shall be changed, but also not a default situation.
+    /// In case nothing shall be changed. No line indenting changes, and no line-feed will be
+    /// inserted.
     pub fn nothing() -> FormatChanges {
         FormatChanges{ new_line: false, new_indent: None }
     }
 
+    /// In case, a new line (line feed) may be inserted, this function may suit your needs.
+    /// Indenting will not be touched, onle the `new_line` flag passed through.
     pub fn may_lf(new_line: bool) -> FormatChanges {
         FormatChanges{ new_line, new_indent: None }
     }
@@ -86,11 +91,14 @@ impl Formatting {
         if self.auto_indenting {
             for pat in self.auto_indent_pat.iter() {
                 if pat == tag {
+                    println!("match! {:?} {:?}", tag.typ, pat);
                     match tag.typ {
                         TagType::Closing => {
                             if self.indent_step > indent {
+                                println!("return Some(0)");
                                 return Some(0)
                             } else {
+                                println!("return Some({:?})", indent - self.indent_step);
                                 return Some(indent - self.indent_step)
                             }
                         }
