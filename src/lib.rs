@@ -22,24 +22,23 @@
 //!
 //! Another formatted text example:
 
-pub mod formatting;
+pub mod format;
 pub mod markupsth;
 pub mod syntax;
-pub mod tagpattern;
 
 pub use crate::{markupsth::MarkupSth, syntax::MarkupLanguage};
 
 // #[cfg(test)]
 // mod tests {
-    // use super::*;
+// use super::*;
 
-    // #[test]
-    // fn html() {
-    //     todo!();
-    // }
+// #[test]
+// fn html() {
+//     todo!();
+// }
 
-    // #[test]
-    // fn xml() {
-    //     todo!();
-    // }
+// #[test]
+// fn xml() {
+//     todo!();
+// }
 // }
