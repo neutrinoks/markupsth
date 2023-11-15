@@ -63,6 +63,29 @@ impl<'s> TagSequence<'s> {
     }
 }
 
+/// TODO description
+#[derive(Debug)]
+pub struct SequenceState {
+    /// Stack of open tags.
+    pub tag_stack: Vec<String>,
+    /// Internal log of the last sequence.
+    pub last_sequence: Sequence,
+    /// Internal log of the last tag to connect to Formatting.
+    pub last_tag: String,
+    // /// Next tag to be printed (just commanded).
+    // pub next_tag: String,
+}
+
+impl SequenceState {
+    pub fn new() -> SequenceState {
+        SequenceState {
+            tag_stack: Vec::new(),
+            last_sequence: Sequence::Initial,
+            last_tag: String::new(),
+        }
+    }
+}
+
 /// Which formatting rules shall be applied, can be specified by this enum. Keep in mind, that on
 /// self-closing tag elements only line-feed rules can be applied, because the indenting is related
 /// to tag-pairs. Whether it shall always be indented or only after a line break does only take

@@ -1,7 +1,7 @@
 //!
 
 use crate::{
-    format::{FormatChanges, Formatter, Sequence, TagSequence},
+    format::{FormatChanges, Formatter, Sequence, SequenceState, TagSequence},
     syntax::{MarkupLanguage, SyntaxConfig},
 };
 use std::fmt::Write;
@@ -15,14 +15,10 @@ pub struct MarkupSth<'r> {
     pub syntax: SyntaxConfig,
     /// Formatting configuration of `MarkupSth`.
     pub formatter: Box<dyn Formatter>,
-    /// Stack of open tags.
-    tag_stack: Vec<String>,
+    /// Sequence state stored interally.
+    seq_state: SequenceState,
     /// Simple optimization.
     indent_str: String,
-    /// Internal log of the last sequence.
-    last_sequence: Sequence,
-    /// Internal log of the last tag to connect to Formatting.
-    last_tag: String,
     /// Reference to a Document.
     document: &'r mut String,
 }
@@ -58,10 +54,8 @@ impl<'d> MarkupSth<'d> {
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
             formatter: Box::new(formatter),
-            tag_stack: Vec::new(),
+            seq_state: SequenceState::new(),
             indent_str: String::new(),
-            last_sequence: Sequence::Initial,
-            last_tag: String::new(),
             document,
         })
     }
@@ -77,8 +71,8 @@ impl<'d> MarkupSth<'d> {
         if let Some(cfg) = &self.syntax.self_closing {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.before, tag))?;
-            self.last_sequence = Sequence::SelfClosing;
-            self.last_tag = tag.to_string();
+            self.seq_state.last_sequence = Sequence::SelfClosing;
+            self.seq_state.last_tag = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no self-closing tag elements allowed".into())
@@ -90,9 +84,9 @@ impl<'d> MarkupSth<'d> {
         if let Some(cfg) = &self.syntax.tag_pairs {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.opener_before, tag))?;
-            self.tag_stack.push(tag.to_string());
-            self.last_sequence = Sequence::Opening;
-            self.last_tag = tag.to_string();
+            self.seq_state.tag_stack.push(tag.to_string());
+            self.seq_state.last_sequence = Sequence::Opening;
+            self.seq_state.last_tag = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into())
@@ -103,23 +97,23 @@ impl<'d> MarkupSth<'d> {
         if self.syntax.tag_pairs.is_none() {
             return Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into());
         }
-        if self.tag_stack.is_empty() {
+        if self.seq_state.tag_stack.is_empty() {
             return Err("MarkupSth: tag-pair tag_stack error".into());
         }
 
-        let tag = self.tag_stack.pop().unwrap();
+        let tag = self.seq_state.tag_stack.pop().unwrap();
         self.finalize_last_op(TagSequence::closing(&tag))?;
         let cfg = self.syntax.tag_pairs.as_ref().unwrap();
         self.document
             .write_fmt(format_args!("{}{}", cfg.closer_before, &tag))?;
-        self.last_sequence = Sequence::Closing;
-        self.last_tag = tag;
+        self.seq_state.last_sequence = Sequence::Closing;
+        self.seq_state.last_tag = tag;
         Ok(())
     }
 
     /// Inserts a single tag with properties.
     pub fn properties(&mut self, properties: &[(String, String)]) -> Result<()> {
-        if !matches!(self.last_sequence, Sequence::SelfClosing | Sequence::Opening) {
+        if !matches!(self.seq_state.last_sequence, Sequence::SelfClosing | Sequence::Opening) {
             return Err(
                 "MarkupSth: properties can only be added to self-closing or opening tags".into(),
             );
@@ -161,7 +155,7 @@ impl<'d> MarkupSth<'d> {
     pub fn text(&mut self, text: &str) -> Result<()> {
         self.finalize_last_op(TagSequence::text())?;
         self.document.write_str(text)?;
-        self.last_sequence = Sequence::Text;
+        self.seq_state.last_sequence = Sequence::Text;
         Ok(())
     }
 
@@ -173,19 +167,19 @@ impl<'d> MarkupSth<'d> {
     fn new_line_internal(&mut self) -> Result<()> {
         self.document
             .write_fmt(format_args!("\n{}", self.indent_str))?;
-        self.last_sequence = Sequence::Text;
+        self.seq_state.last_sequence = Sequence::Text;
         Ok(())
     }
 
     pub fn close_all(&mut self) -> Result<()> {
-        for _ in 0..self.tag_stack.len() {
+        for _ in 0..self.seq_state.tag_stack.len() {
             self.close()?;
         }
         Ok(())
     }
 
     pub fn finalize(self) -> Result<()> {
-        match self.last_sequence {
+        match self.seq_state.last_sequence {
             Sequence::SelfClosing => final_op_arm!(selfclosing self),
             Sequence::Opening => final_op_arm!(opening self),
             Sequence::Closing => final_op_arm!(closing self),
@@ -199,8 +193,8 @@ impl<'d> MarkupSth<'d> {
     /// properties, which can be added afterwards.
     fn finalize_last_op(&mut self, next: TagSequence) -> Result<()> {
         let indent = self.indent_str.len();
-        let last = TagSequence::from(&self.last_sequence, &self.last_tag);
-        match self.last_sequence {
+        let last = TagSequence::from(&self.seq_state.last_sequence, &self.seq_state.last_tag);
+        match self.seq_state.last_sequence {
             Sequence::Initial => {
                 if let Some(dt) = self.syntax.doctype.as_ref() {
                     self.document.write_str(dt)?;
