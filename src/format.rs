@@ -55,8 +55,9 @@ impl<'s> TagSequence<'s> {
 
     pub fn from(seq: &Sequence, tag: &'s str) -> TagSequence<'s> {
         match seq {
-            Sequence::SelfClosing | Sequence::Opening | Sequence::Closing =>
-                TagSequence(seq.clone(), tag),
+            Sequence::SelfClosing | Sequence::Opening | Sequence::Closing => {
+                TagSequence(seq.clone(), tag)
+            }
             _ => TagSequence(seq.clone(), ""),
         }
     }
@@ -191,7 +192,10 @@ impl FormatChanges {
 
     /// An indented block is following. New line and increase indenting.
     pub fn indent_more(indent: usize, step: usize) -> FormatChanges {
-        FormatChanges{ new_line: true, new_indent: Some(indent + step) }
+        FormatChanges {
+            new_line: true,
+            new_indent: Some(indent + step),
+        }
     }
 
     /// An indented block is ending. New line and decrease indenting.
@@ -201,12 +205,20 @@ impl FormatChanges {
         } else {
             Some(indent - step)
         };
-        FormatChanges{ new_line: true, new_indent }
+        FormatChanges {
+            new_line: true,
+            new_indent,
+        }
     }
 }
 
 /// TODO
-pub trait Formatter: Default + std::fmt::Debug {
+pub trait Formatter: std::fmt::Debug {
+    /// New type pattern as default.
+    fn new() -> Self
+    where
+        Self: Sized;
+
     /// Sets the indenting step size, pre-defined default is 4.
     fn set_indent_size(&mut self, step_size: usize);
 
@@ -215,48 +227,64 @@ pub trait Formatter: Default + std::fmt::Debug {
     fn check(&self, last: &TagSequence, next: &TagSequence, indent: usize) -> FormatChanges;
 }
 
-/// A pre-defined `Formatter`. TODO
-#[derive(Debug)]
-pub struct GenFmtrNoFormatting;
+pub mod generic {
+    use super::*;
 
-impl Default for GenFmtrNoFormatting {
-    fn default() -> GenFmtrNoFormatting {
-        GenFmtrNoFormatting
-    }
-}
+    /// A pre-defined `Formatter`. TODO
+    #[derive(Debug)]
+    pub struct NoFormatting;
 
-impl Formatter for GenFmtrNoFormatting {
-    /// See trait description.
-    fn set_indent_size(&mut self, _: usize) {}
+    impl Formatter for NoFormatting {
+        /// See trait description.
+        fn new() -> NoFormatting {
+            NoFormatting
+        }
 
-    /// See trait description.
-    fn check(&self, _: &TagSequence, _: &TagSequence, _: usize) -> FormatChanges {
-        FormatChanges::nothing()
-    }
-}
+        /// See trait description.
+        fn set_indent_size(&mut self, _: usize) {}
 
-/// A pre-defined `Formatter`. TODO
-#[derive(Debug)]
-pub struct GenFmtrAlwaysIndent(usize);
-
-impl Default for GenFmtrAlwaysIndent {
-    fn default() -> Self {
-        GenFmtrAlwaysIndent(DEFAULT_INDENT)
-    }
-}
-
-impl Formatter for GenFmtrAlwaysIndent {
-    /// See trait description.
-    fn set_indent_size(&mut self, step_size: usize) {
-        self.0 = step_size;
+        /// See trait description.
+        fn check(&self, _: &TagSequence, _: &TagSequence, _: usize) -> FormatChanges {
+            FormatChanges::nothing()
+        }
     }
 
-    /// See trait description.
-    fn check(&self, last: &TagSequence, next: &TagSequence, indent: usize) -> FormatChanges {
-        match last.0 {
-            Sequence::Initial => FormatChanges::may_lf(true),
-            Sequence::Opening => FormatChanges::indent_more(indent, self.0),
-            _ => todo!(),        
+    /// A pre-defined `Formatter`. TODO
+    #[derive(Debug)]
+    pub struct AlwaysIndentAlwaysLf(usize);
+
+    impl Formatter for AlwaysIndentAlwaysLf {
+        /// See trait description.
+        fn new() -> AlwaysIndentAlwaysLf {
+            AlwaysIndentAlwaysLf(DEFAULT_INDENT)
+        }
+
+        /// See trait description.
+        fn set_indent_size(&mut self, step_size: usize) {
+            self.0 = step_size;
+        }
+
+        /// See trait description.
+        fn check(&self, last: &TagSequence, next: &TagSequence, indent: usize) -> FormatChanges {
+            if matches!(next.0, Sequence::Closing) {
+                match last.0 {
+                    Sequence::Opening => FormatChanges::may_lf(true),
+                    _ => FormatChanges::indent_less(indent, self.0),
+                }
+            } else {
+                match last.0 {
+                    Sequence::Initial => FormatChanges::may_lf(true),
+                    Sequence::Opening => match next.0 {
+                        Sequence::SelfClosing | Sequence::Text | Sequence::Opening => {
+                            FormatChanges::indent_more(indent, self.0)
+                        }
+                        _ => FormatChanges::nothing(),
+                    },
+                    Sequence::Closing => FormatChanges::may_lf(true),
+                    Sequence::SelfClosing => FormatChanges::may_lf(true),
+                    _ => FormatChanges::nothing(),
+                }
+            }
         }
     }
 }

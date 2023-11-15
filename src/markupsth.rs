@@ -1,20 +1,20 @@
 //!
 
-use std::fmt::Write;
 use crate::{
-    format::{FormatChanges, Formatter, GenFmtrNoFormatting, Sequence, TagRule, TagSequence},
+    format::{FormatChanges, Formatter, Sequence, TagSequence},
     syntax::{MarkupLanguage, SyntaxConfig},
 };
+use std::fmt::Write;
 
 /// Result definition.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Debug)]
-pub struct MarkupSth<'r, 'f, F: Formatter> {
+pub struct MarkupSth<'r> {
     /// Syntax configuration of `MarkupSth`.
     pub syntax: SyntaxConfig,
     /// Formatting configuration of `MarkupSth`.
-    pub formatter: &'f F,
+    pub formatter: Box<dyn Formatter>,
     /// Stack of open tags.
     stack: Vec<String>,
     /// Simple optimization.
@@ -25,8 +25,6 @@ pub struct MarkupSth<'r, 'f, F: Formatter> {
     log: String,
     /// Reference to a Document.
     document: &'r mut String,
-    /// A default formatter optional.
-    opt_fmtr: Option<GenFmtrNoFormatting>,
 }
 
 /// Do not repeat yourself!
@@ -53,27 +51,23 @@ macro_rules! final_op_arm {
 
 pub(crate) use final_op_arm;
 
-impl<'d, 'f, F: Formatter> MarkupSth<'d, 'f, F> {
+impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
-    pub fn new(
-        document: &'d mut String,
-        ml: MarkupLanguage,
-    ) -> Result<MarkupSth<'d, 'f, F>> {
-        let formatter = GenFmtrNoFormatting::default();
+    pub fn new(document: &'d mut String, ml: MarkupLanguage) -> Result<MarkupSth<'d>> {
+        let formatter = crate::format::generic::NoFormatting::new();
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
-            formatter: &(formatter as Formatter),
+            formatter: Box::new(formatter),
             stack: Vec::new(),
             indent_str: String::new(),
             state: Sequence::Initial,
             log: String::new(),
             document,
-            opt_fmtr: Some(formatter),
         })
     }
 
     /// Set a new `Formatter`.
-    pub fn set_formatter(&mut self, formatter: F) {
+    pub fn set_formatter(&mut self, formatter: Box<dyn Formatter>) {
         self.formatter = formatter;
     }
 
@@ -210,28 +204,14 @@ impl<'d, 'f, F: Formatter> MarkupSth<'d, 'f, F> {
             Sequence::Initial => {
                 if let Some(dt) = self.syntax.doctype.as_ref() {
                     self.document.write_str(dt)?;
-                    self.apply_format_changes(
-                        self.formatter.check(&last, &next, indent))?;
                 }
-                // self.state = Sequence::Text; // because nothing happens
             }
-            Sequence::SelfClosing => {
-                final_op_arm!(selfclosing self);
-                self.apply_format_changes(
-                    self.formatter.check(&last, &next, indent))?;
-            }
-            Sequence::Opening => {
-                final_op_arm!(opening self);
-                self.apply_format_changes(
-                    self.formatter.check(&last, &next, indent))?;
-            }
-            Sequence::Closing => {
-                final_op_arm!(closing self);
-                self.apply_format_changes(
-                    self.formatter.check(&last, &next, indent))?;
-            }
+            Sequence::SelfClosing => final_op_arm!(selfclosing self),
+            Sequence::Opening => final_op_arm!(opening self),
+            Sequence::Closing => final_op_arm!(closing self),
             Sequence::Text | Sequence::LineFeed => {}
         }
+        self.apply_format_changes(self.formatter.check(&last, &next, indent))?;
         Ok(())
     }
 
@@ -256,13 +236,18 @@ macro_rules! properties {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::GenFmtrAlwaysIndent;
+    use crate::format::generic::*;
+
+    fn testfile(name: &str) -> String {
+        let mut s = std::fs::read_to_string(name).unwrap();
+        s.pop();
+        s
+    }
 
     #[test]
     fn simple_unformatted_html() {
         let mut document = String::new();
-        let mut markup = MarkupSth::<GenFmtrNoFormatting>::new(&mut document, MarkupLanguage::Html)
-            .unwrap();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
         markup.open("html").unwrap();
         markup.text("Dies ist HTML").unwrap();
         markup.close().unwrap();
@@ -273,8 +258,7 @@ mod tests {
     #[test]
     fn unformatted_html_with_properties() {
         let mut document = String::new();
-        let mut markup = MarkupSth::<GenFmtrNoFormatting>::new(&mut document, MarkupLanguage::Html)
-            .unwrap();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
         markup.open("body").unwrap();
         markup.open("section").unwrap();
         markup.properties(&properties!["class", "class"]).unwrap();
@@ -298,11 +282,10 @@ mod tests {
     }
 
     #[test]
-    fn default_html_formatting() {
+    fn formatted_html_always_indent() {
         let mut document = String::new();
-        let mut markup = MarkupSth::<GenFmtrNoFormatting>::new(&mut document, MarkupLanguage::Html)
-            .unwrap();
-        markup.set_formatter(GenFmtrAlwaysIndent::new());
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        markup.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
         markup.open("head").unwrap();
         markup.self_closing("meta").unwrap();
         markup.properties(&properties!["charset", "utf-8"]).unwrap();
@@ -312,33 +295,11 @@ mod tests {
         markup.open("div").unwrap();
         markup.open("p").unwrap();
         markup.text("Text").unwrap();
-        markup.close().unwrap();
-        markup.close().unwrap();
-        markup.close().unwrap();
-        markup.close().unwrap();
         markup.close_all().unwrap();
+        markup.finalize().unwrap();
         assert_eq!(
             document,
-            concat![
-                r#"<!DOCTYPE html>"#,
-                '\n',
-                r#"<head>"#,
-                '\n',
-                r#"    <meta charset="utf-8">"#,
-                '\n',
-                r#"</head>"#,
-                '\n',
-                r#"<body>"#,
-                '\n',
-                r#"    <section>"#,
-                '\n',
-                r#"        <div><p>Text</p></div>"#,
-                '\n',
-                r#"    </section>"#,
-                '\n',
-                r#"</body>"#,
-                '\n'
-            ]
+            testfile("tests/formatted_html_always_indent.html"),
         );
     }
 }
