@@ -30,40 +30,42 @@ pub enum Sequence {
 
 /// A certain sequence in ML-generation, that means a 'Sequence' with a tag identifier.
 #[derive(Debug, Clone)]
-pub struct TagSequence<'s>(Sequence, &'s str);
+pub struct TagSequence(pub Sequence, pub String);
 
-impl<'s> TagSequence<'s> {
-    pub fn self_closing(tag: &'s str) -> TagSequence<'s> {
-        TagSequence(Sequence::SelfClosing, tag)
+impl<'s> TagSequence {
+    pub fn self_closing(tag: &'s str) -> TagSequence {
+        TagSequence(Sequence::SelfClosing, tag.to_string())
     }
 
-    pub fn opening(tag: &'s str) -> TagSequence<'s> {
-        TagSequence(Sequence::Opening, tag)
+    pub fn opening(tag: &'s str) -> TagSequence {
+        TagSequence(Sequence::Opening, tag.to_string())
     }
 
-    pub fn closing(tag: &'s str) -> TagSequence<'s> {
-        TagSequence(Sequence::Closing, tag)
+    pub fn closing(tag: &'s str) -> TagSequence {
+        TagSequence(Sequence::Closing, tag.to_string())
     }
 
-    pub fn text() -> TagSequence<'s> {
-        TagSequence(Sequence::Text, "")
+    pub fn text() -> TagSequence {
+        TagSequence(Sequence::Text, String::new())
     }
 
-    pub fn linefeed() -> TagSequence<'s> {
-        TagSequence(Sequence::LineFeed, "")
+    pub fn linefeed() -> TagSequence {
+        TagSequence(Sequence::LineFeed, String::new())
     }
 
-    pub fn from(seq: &Sequence, tag: &'s str) -> TagSequence<'s> {
+    pub fn from(seq: &Sequence, tag: &'s str) -> TagSequence {
         match seq {
             Sequence::SelfClosing | Sequence::Opening | Sequence::Closing => {
-                TagSequence(seq.clone(), tag)
+                TagSequence(seq.clone(), tag.to_string())
             }
-            _ => TagSequence(seq.clone(), ""),
+            _ => TagSequence(seq.clone(), String::new()),
         }
     }
 }
 
-/// TODO description
+/// The `SequenceState` encapsules everything one need to know, to create change orders related to
+/// formatting (order for changes, e.g. indent more, less or insert line feed etc.). This changes
+/// are described by the `FormatChanges` definition.
 #[derive(Debug)]
 pub struct SequenceState {
     /// Stack of open tags.
@@ -72,8 +74,10 @@ pub struct SequenceState {
     pub last_sequence: Sequence,
     /// Internal log of the last tag to connect to Formatting.
     pub last_tag: String,
-    // /// Next tag to be printed (just commanded).
-    // pub next_tag: String,
+    /// Next tag to be printed (just commanded).
+    pub next_tag: TagSequence,
+    /// Current steps of indenting in total.
+    pub indent: usize,
 }
 
 impl SequenceState {
@@ -82,7 +86,15 @@ impl SequenceState {
             tag_stack: Vec::new(),
             last_sequence: Sequence::Initial,
             last_tag: String::new(),
+            next_tag: TagSequence::text(),
+            indent: 0,
         }
+    }
+}
+
+impl Default for SequenceState {
+    fn default() -> SequenceState {
+        SequenceState::new()
     }
 }
 
@@ -163,27 +175,6 @@ macro_rules! tag_rule_set {
     }
 }
 
-// #[derive(Clone, Debug, Eq, PartialEq)]
-// pub enum LanguageFormatting {
-//     /// Absolutely no formatting.
-//     NoFormatting,
-//     /// Generic block oriented indenting, blocks will always be indented.
-//     GenericAlwaysIndent,
-//     /// A pre-defined formatting for readable HTML.
-//     CleanHtml,
-//     /// Individual formatting configuration.
-//     Other(Formatting),
-// }
-
-// impl From<MarkupLanguage> for LanguageFormatting {
-//     fn from(ml: MarkupLanguage) -> LanguageFormatting {
-//         match ml {
-//             MarkupLanguage::Html => LanguageFormatting::CleanHtml,
-//             _ => LanguageFormatting::NoFormatting,
-//         }
-//     }
-// }
-
 #[derive(Clone, Debug)]
 pub struct FormatChanges {
     /// Shall a new line (line feed) be inserted after inserting certain tag elements.
@@ -235,7 +226,10 @@ impl FormatChanges {
     }
 }
 
-/// TODO
+/// The `Formatter` trait is markupsth's default interface for formatter-implementations. A
+/// `Formatter` will check live while generating Markup content, whether the current input shall be
+/// indented or a line feed shall be inserted. There will be a couple of pre-defined
+/// implementations, e.g. `AutoIndent` or `AlwaysIndentAlwaysLf` or `NoFormatting`.
 pub trait Formatter: std::fmt::Debug {
     /// New type pattern as default.
     fn new() -> Self
@@ -243,15 +237,25 @@ pub trait Formatter: std::fmt::Debug {
         Self: Sized;
 
     /// Sets the indenting step size, pre-defined default is 4.
-    fn set_indent_size(&mut self, step_size: usize);
+    fn set_indent_step_size(&mut self, step_size: usize);
+
+    /// Getter method for indenting step izse.
+    fn get_indent_step_size(&self) -> usize;
 
     /// Check for format changes between last und next `TagSequence`. Neccessary changes regarding
     /// indenting and/or line-feed will be returned by a `FormatChanges`.
-    fn check(&self, last: &TagSequence, next: &TagSequence, indent: usize) -> FormatChanges;
+    fn check(&mut self, state: &SequenceState) -> FormatChanges;
 }
 
 pub mod generic {
     use super::*;
+
+    #[macro_export]
+    macro_rules! always_filter {
+        ($($tag:tt),*) => {
+            vec![$($tag.to_string()),*]
+        }
+    }
 
     /// A pre-defined `Formatter`. TODO
     #[derive(Debug)]
@@ -264,10 +268,15 @@ pub mod generic {
         }
 
         /// See trait description.
-        fn set_indent_size(&mut self, _: usize) {}
+        fn set_indent_step_size(&mut self, _: usize) {}
 
         /// See trait description.
-        fn check(&self, _: &TagSequence, _: &TagSequence, _: usize) -> FormatChanges {
+        fn get_indent_step_size(&self) -> usize {
+            0
+        }
+
+        /// See trait description.
+        fn check(&mut self, _: &SequenceState) -> FormatChanges {
             FormatChanges::nothing()
         }
     }
@@ -283,23 +292,28 @@ pub mod generic {
         }
 
         /// See trait description.
-        fn set_indent_size(&mut self, step_size: usize) {
+        fn set_indent_step_size(&mut self, step_size: usize) {
             self.0 = step_size;
         }
 
         /// See trait description.
-        fn check(&self, last: &TagSequence, next: &TagSequence, indent: usize) -> FormatChanges {
-            if matches!(next.0, Sequence::Closing) {
-                match last.0 {
+        fn get_indent_step_size(&self) -> usize {
+            self.0
+        }
+
+        /// See trait description.
+        fn check(&mut self, state: &SequenceState) -> FormatChanges {
+            if matches!(state.next_tag.0, Sequence::Closing) {
+                match state.last_sequence {
                     Sequence::Opening => FormatChanges::may_lf(true),
-                    _ => FormatChanges::indent_less(indent, self.0),
+                    _ => FormatChanges::indent_less(state.indent, self.0),
                 }
             } else {
-                match last.0 {
+                match state.last_sequence {
                     Sequence::Initial => FormatChanges::may_lf(true),
-                    Sequence::Opening => match next.0 {
+                    Sequence::Opening => match state.next_tag.0 {
                         Sequence::SelfClosing | Sequence::Text | Sequence::Opening => {
-                            FormatChanges::indent_more(indent, self.0)
+                            FormatChanges::indent_more(state.indent, self.0)
                         }
                         _ => FormatChanges::nothing(),
                     },
@@ -310,66 +324,83 @@ pub mod generic {
             }
         }
     }
+
+    /// TODO: Decription
+    #[derive(Debug)]
+    pub struct AutoIndent {
+        indent_filter: Vec<String>,
+        indent_stack: Vec<bool>,
+        indent_step: usize,
+    }
+
+    impl AutoIndent {
+        /// Tag names after which shall always be indented more, can be setup in this filter. For
+        /// example, if always shall be indented more after the following tag names: "head",
+        /// "body", "section":
+        /// ```ignore
+        /// let mut formatter = AutoIndent::new();
+        /// formatter.set_always_filter(always_filter!["head", "body", "section"]);
+        /// ```
+        /// Default is empty.
+        pub fn set_always_filter(&mut self, filter: Vec<String>) {
+            self.indent_filter = filter;
+        }
+
+        // Internal check method if tag is contained in field `indent_filter`.
+        fn is_indent_filter(&self, tag: &str) -> bool {
+            for tf in self.indent_filter.iter() {
+                if tf == tag {
+                    return true;
+                }
+            }
+            false
+        }
+    }
+
+    impl Formatter for AutoIndent {
+        /// See trait description.
+        fn new() -> AutoIndent {
+            AutoIndent {
+                indent_filter: Vec::new(),
+                indent_stack: Vec::new(),
+                indent_step: DEFAULT_INDENT,
+            }
+        }
+
+        /// See trait description.
+        fn set_indent_step_size(&mut self, step_size: usize) {
+            self.indent_step = step_size;
+        }
+
+        /// See trait description.
+        fn get_indent_step_size(&self) -> usize {
+            self.indent_step
+        }
+
+        /// See trait description.
+        fn check(&mut self, state: &SequenceState) -> FormatChanges {
+            // If last one was an opening-tag, it definitely has to added an entry on stack_indent.
+            // Separate checking, because it is too complicated to depict it on each possible case.
+            if matches!(state.last_sequence, Sequence::Opening) {
+                let opening_lf = matches!(state.next_tag.0, Sequence::LineFeed);
+                self.indent_stack
+                    .push(opening_lf || self.is_indent_filter(&state.last_tag));
+            }
+            // If last tag was the initial document sequence, also line feed always!
+            if matches!(state.last_sequence, Sequence::Initial) {
+                return FormatChanges::may_lf(true);
+            }
+            // Check next sequence and return FormatChanges
+            match state.next_tag.0 {
+                Sequence::Closing => {
+                    if let Some(true) = self.indent_stack.pop() {
+                        FormatChanges::indent_less(state.indent, self.indent_step)
+                    } else {
+                        FormatChanges::nothing()
+                    }
+                }
+                _ => FormatChanges::nothing(),
+            }
+        }
+    }
 }
-
-// /// Main configuration struct for formatting in `MarkupSth`.
-// #[derive(Clone, Debug, Eq, PartialEq)]
-// pub struct Formatting {
-//     /// Step size of indenting.
-//     pub indent_step: usize,
-//     /// New line after doctype information.
-//     pub doctype_lf: bool,
-//     /// Pattern setup for auto-line-feed.
-//     pub tag_rules: Vec<TagRule>,
-// }
-
-// impl Formatting {
-//     pub fn new_format(&self, last: TagSequence, next: TagSequence, indent: usize) -> FormatChanges {
-//         let mut new_line = false;
-//         let mut new_indent = None;
-
-//         for rule in self.tag_rules.iter() {
-//             let last_matches = rule.ident == last.1;
-//             let next_matches = rule.ident == next.1;
-//             if last_matches {
-//                 match rule.format {
-//                     TagFormatting::LineFeed => {
-//                     }
-//                     TagFormatting::AlwaysIndent => {
-//                     }
-//                     TagFormatting::AutoIndent => {
-//                     }
-//                 }
-//             }
-//             if next_matches {
-//             }
-//         }
-
-//         FormatChanges { new_line, new_indent }
-//     }
-// }
-
-// impl From<MarkupLanguage> for Formatting {
-//     fn from(ml: MarkupLanguage) -> Formatting {
-//         Formatting::from(LanguageFormatting::from(ml))
-//     }
-// }
-
-// impl From<LanguageFormatting> for Formatting {
-//     fn from(formatting: LanguageFormatting) -> Formatting {
-//         match formatting {
-//             LanguageFormatting::NoFormatting => GenFmtrNoFormatting::new(4),
-//             LanguageFormatting::GenericAlwaysIndent => GenFmtrAlwaysIndent::new(4),
-//             // LanguageFormatting::CleanHtml => Formatting {
-//             //     indent_step: 4,
-//             //     doctype_lf: true,
-//             //     tag_rules: tag_rule_set![
-//             //         indented "html", indented "head", indented "head", indented "body",
-//             //         indented "section", indented "header", indented "nav", indented "footer",
-//             //         auto "div", indented "ul", linefeed "li"],
-//             // },
-//             LanguageFormatting::Other(f) => f,
-//             _ => todo!(),
-//         }
-//     }
-// }

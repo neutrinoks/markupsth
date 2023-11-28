@@ -10,7 +10,7 @@ use std::fmt::Write;
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Debug)]
-pub struct MarkupSth<'r> {
+pub struct MarkupSth<'d> {
     /// Syntax configuration of `MarkupSth`.
     pub syntax: SyntaxConfig,
     /// Formatting configuration of `MarkupSth`.
@@ -20,7 +20,7 @@ pub struct MarkupSth<'r> {
     /// Simple optimization.
     indent_str: String,
     /// Reference to a Document.
-    document: &'r mut String,
+    document: &'d mut String,
 }
 
 /// Do not repeat yourself!
@@ -71,8 +71,6 @@ impl<'d> MarkupSth<'d> {
         if let Some(cfg) = &self.syntax.self_closing {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.before, tag))?;
-            self.seq_state.last_sequence = Sequence::SelfClosing;
-            self.seq_state.last_tag = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no self-closing tag elements allowed".into())
@@ -85,8 +83,6 @@ impl<'d> MarkupSth<'d> {
             self.document
                 .write_fmt(format_args!("{}{}", cfg.opener_before, tag))?;
             self.seq_state.tag_stack.push(tag.to_string());
-            self.seq_state.last_sequence = Sequence::Opening;
-            self.seq_state.last_tag = tag.to_string();
             Ok(())
         } else {
             Err("MarkupSth: in this syntaxuration are no tag-pair element allowed".into())
@@ -106,14 +102,15 @@ impl<'d> MarkupSth<'d> {
         let cfg = self.syntax.tag_pairs.as_ref().unwrap();
         self.document
             .write_fmt(format_args!("{}{}", cfg.closer_before, &tag))?;
-        self.seq_state.last_sequence = Sequence::Closing;
-        self.seq_state.last_tag = tag;
         Ok(())
     }
 
     /// Inserts a single tag with properties.
     pub fn properties(&mut self, properties: &[(String, String)]) -> Result<()> {
-        if !matches!(self.seq_state.last_sequence, Sequence::SelfClosing | Sequence::Opening) {
+        if !matches!(
+            self.seq_state.last_sequence,
+            Sequence::SelfClosing | Sequence::Opening
+        ) {
             return Err(
                 "MarkupSth: properties can only be added to self-closing or opening tags".into(),
             );
@@ -155,19 +152,34 @@ impl<'d> MarkupSth<'d> {
     pub fn text(&mut self, text: &str) -> Result<()> {
         self.finalize_last_op(TagSequence::text())?;
         self.document.write_str(text)?;
-        self.seq_state.last_sequence = Sequence::Text;
         Ok(())
     }
 
     pub fn new_line(&mut self) -> Result<()> {
         self.finalize_last_op(TagSequence::linefeed())?;
-        self.new_line_internal()
+        // self.seq_state.last_sequence = Sequence::LineFeed;
+        Ok(())
+    }
+
+    pub fn indent_more(&mut self) -> Result<()> {
+        self.apply_format_changes(FormatChanges::indent_more(
+            self.seq_state.indent,
+            self.formatter.get_indent_step_size(),
+        ))?;
+        Ok(())
+    }
+
+    pub fn indent_less(&mut self) -> Result<()> {
+        self.apply_format_changes(FormatChanges::indent_less(
+            self.seq_state.indent,
+            self.formatter.get_indent_step_size(),
+        ))?;
+        Ok(())
     }
 
     fn new_line_internal(&mut self) -> Result<()> {
         self.document
             .write_fmt(format_args!("\n{}", self.indent_str))?;
-        self.seq_state.last_sequence = Sequence::Text;
         Ok(())
     }
 
@@ -192,8 +204,7 @@ impl<'d> MarkupSth<'d> {
     /// elements will never be closed when inserting them, it has to be done later due to optional
     /// properties, which can be added afterwards.
     fn finalize_last_op(&mut self, next: TagSequence) -> Result<()> {
-        let indent = self.indent_str.len();
-        let last = TagSequence::from(&self.seq_state.last_sequence, &self.seq_state.last_tag);
+        // Close last tag (maybe after we have added properties).
         match self.seq_state.last_sequence {
             Sequence::Initial => {
                 if let Some(dt) = self.syntax.doctype.as_ref() {
@@ -205,13 +216,18 @@ impl<'d> MarkupSth<'d> {
             Sequence::Closing => final_op_arm!(closing self),
             Sequence::Text | Sequence::LineFeed => {}
         }
-        self.apply_format_changes(self.formatter.check(&last, &next, indent))?;
+        self.seq_state.next_tag = next.clone();
+        let check = self.formatter.check(&self.seq_state);
+        self.apply_format_changes(check)?;
+        self.seq_state.last_sequence = next.0;
+        self.seq_state.last_tag = next.1;
         Ok(())
     }
 
     fn apply_format_changes(&mut self, changes: FormatChanges) -> Result<()> {
         if let Some(indent) = changes.new_indent {
             self.indent_str = " ".repeat(indent);
+            self.seq_state.indent = indent;
         }
         if changes.new_line {
             self.new_line_internal()?;
@@ -295,5 +311,29 @@ mod tests {
             document,
             testfile("tests/formatted_html_always_indent.html"),
         );
+    }
+
+    #[test]
+    fn formatted_html_auto_indent() {
+        let mut document = String::new();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        markup.set_formatter(Box::new(AutoIndent::new()));
+        markup.open("head").unwrap();
+        markup.new_line().unwrap();
+        markup.self_closing("meta").unwrap();
+        markup.properties(&properties!["charset", "utf-8"]).unwrap();
+        markup.close().unwrap();
+        markup.open("body").unwrap();
+        markup.new_line().unwrap();
+        markup.open("section").unwrap();
+        markup.new_line().unwrap();
+        markup.open("div").unwrap();
+        markup.new_line().unwrap();
+        markup.open("div").unwrap();
+        markup.open("p").unwrap();
+        markup.text("Text").unwrap();
+        markup.close_all().unwrap();
+        markup.finalize().unwrap();
+        assert_eq!(document, testfile("tests/formatted_html_auto_indent.html"),);
     }
 }
