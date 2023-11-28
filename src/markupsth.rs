@@ -108,7 +108,7 @@ impl<'d> MarkupSth<'d> {
     /// Inserts a single tag with properties.
     pub fn properties(&mut self, properties: &[(String, String)]) -> Result<()> {
         if !matches!(
-            self.seq_state.last_sequence,
+            self.seq_state.last.0,
             Sequence::SelfClosing | Sequence::Opening
         ) {
             return Err(
@@ -157,7 +157,7 @@ impl<'d> MarkupSth<'d> {
 
     pub fn new_line(&mut self) -> Result<()> {
         self.finalize_last_op(TagSequence::linefeed())?;
-        // self.seq_state.last_sequence = Sequence::LineFeed;
+        // self.seq_state.last.0 = Sequence::LineFeed;
         Ok(())
     }
 
@@ -191,7 +191,7 @@ impl<'d> MarkupSth<'d> {
     }
 
     pub fn finalize(self) -> Result<()> {
-        match self.seq_state.last_sequence {
+        match self.seq_state.last.0 {
             Sequence::SelfClosing => final_op_arm!(selfclosing self),
             Sequence::Opening => final_op_arm!(opening self),
             Sequence::Closing => final_op_arm!(closing self),
@@ -205,7 +205,7 @@ impl<'d> MarkupSth<'d> {
     /// properties, which can be added afterwards.
     fn finalize_last_op(&mut self, next: TagSequence) -> Result<()> {
         // Close last tag (maybe after we have added properties).
-        match self.seq_state.last_sequence {
+        match self.seq_state.last.0 {
             Sequence::Initial => {
                 if let Some(dt) = self.syntax.doctype.as_ref() {
                     self.document.write_str(dt)?;
@@ -216,11 +216,10 @@ impl<'d> MarkupSth<'d> {
             Sequence::Closing => final_op_arm!(closing self),
             Sequence::Text | Sequence::LineFeed => {}
         }
-        self.seq_state.next_tag = next.clone();
+        self.seq_state.next = next.clone();
         let check = self.formatter.check(&self.seq_state);
         self.apply_format_changes(check)?;
-        self.seq_state.last_sequence = next.0;
-        self.seq_state.last_tag = next.1;
+        self.seq_state.last = next;
         Ok(())
     }
 
@@ -246,13 +245,6 @@ macro_rules! properties {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::generic::*;
-
-    fn testfile(name: &str) -> String {
-        let mut s = std::fs::read_to_string(name).unwrap();
-        s.pop();
-        s
-    }
 
     #[test]
     fn simple_unformatted_html() {
@@ -289,51 +281,5 @@ mod tests {
                 r#"Text<img src="img.jpg"></div></section></body>"#
             ]
         );
-    }
-
-    #[test]
-    fn formatted_html_always_indent() {
-        let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
-        markup.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
-        markup.open("head").unwrap();
-        markup.self_closing("meta").unwrap();
-        markup.properties(&properties!["charset", "utf-8"]).unwrap();
-        markup.close().unwrap();
-        markup.open("body").unwrap();
-        markup.open("section").unwrap();
-        markup.open("div").unwrap();
-        markup.open("p").unwrap();
-        markup.text("Text").unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
-        assert_eq!(
-            document,
-            testfile("tests/formatted_html_always_indent.html"),
-        );
-    }
-
-    #[test]
-    fn formatted_html_auto_indent() {
-        let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
-        markup.set_formatter(Box::new(AutoIndent::new()));
-        markup.open("head").unwrap();
-        markup.new_line().unwrap();
-        markup.self_closing("meta").unwrap();
-        markup.properties(&properties!["charset", "utf-8"]).unwrap();
-        markup.close().unwrap();
-        markup.open("body").unwrap();
-        markup.new_line().unwrap();
-        markup.open("section").unwrap();
-        markup.new_line().unwrap();
-        markup.open("div").unwrap();
-        markup.new_line().unwrap();
-        markup.open("div").unwrap();
-        markup.open("p").unwrap();
-        markup.text("Text").unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
-        assert_eq!(document, testfile("tests/formatted_html_auto_indent.html"),);
     }
 }

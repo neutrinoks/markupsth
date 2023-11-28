@@ -26,19 +26,62 @@ pub mod format;
 pub mod markupsth;
 pub mod syntax;
 
-pub use crate::{markupsth::MarkupSth, syntax::MarkupLanguage};
+pub use crate::{
+    format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::MarkupLanguage,
+};
 
-// #[cfg(test)]
-// mod tests {
-// use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// #[test]
-// fn html() {
-//     todo!();
-// }
+    fn testfile(name: &str) -> String {
+        let mut s = std::fs::read_to_string(name).unwrap();
+        s.pop();
+        s
+    }
 
-// #[test]
-// fn xml() {
-//     todo!();
-// }
-// }
+    #[test]
+    fn formatted_html_always_indent() {
+        let mut document = String::new();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        markup.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
+        markup.open("head").unwrap();
+        markup.self_closing("meta").unwrap();
+        markup.properties(&properties!["charset", "utf-8"]).unwrap();
+        markup.close().unwrap();
+        markup.open("body").unwrap();
+        markup.open("section").unwrap();
+        markup.open("div").unwrap();
+        markup.open("p").unwrap();
+        markup.text("Text").unwrap();
+        markup.close_all().unwrap();
+        markup.finalize().unwrap();
+        assert_eq!(
+            document,
+            testfile("tests/formatted_html_always_indent.html"),
+        );
+    }
+
+    #[test]
+    fn formatted_html_auto_indent() {
+        let mut document = String::new();
+        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        let mut formatter = AutoIndent::new();
+        formatter.set_always_filter(always_filter!["head", "body", "section"]);
+        markup.set_formatter(Box::new(formatter));
+        markup.open("head").unwrap();
+        markup.self_closing("meta").unwrap();
+        markup.properties(&properties!["charset", "utf-8"]).unwrap();
+        markup.close().unwrap();
+        markup.open("body").unwrap();
+        markup.open("section").unwrap();
+        markup.open("div").unwrap();
+        markup.new_line().unwrap();
+        markup.open("div").unwrap();
+        markup.open("p").unwrap();
+        markup.text("Text").unwrap();
+        markup.close_all().unwrap();
+        markup.finalize().unwrap();
+        assert_eq!(document, testfile("tests/formatted_html_auto_indent.html"),);
+    }
+}

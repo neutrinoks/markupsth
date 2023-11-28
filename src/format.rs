@@ -53,6 +53,10 @@ impl<'s> TagSequence {
         TagSequence(Sequence::LineFeed, String::new())
     }
 
+    pub fn initial() -> TagSequence {
+        TagSequence(Sequence::Initial, String::new())
+    }
+
     pub fn from(seq: &Sequence, tag: &'s str) -> TagSequence {
         match seq {
             Sequence::SelfClosing | Sequence::Opening | Sequence::Closing => {
@@ -70,12 +74,10 @@ impl<'s> TagSequence {
 pub struct SequenceState {
     /// Stack of open tags.
     pub tag_stack: Vec<String>,
-    /// Internal log of the last sequence.
-    pub last_sequence: Sequence,
-    /// Internal log of the last tag to connect to Formatting.
-    pub last_tag: String,
+    /// Internal log of the last tag sequence.
+    pub last: TagSequence,
     /// Next tag to be printed (just commanded).
-    pub next_tag: TagSequence,
+    pub next: TagSequence,
     /// Current steps of indenting in total.
     pub indent: usize,
 }
@@ -84,9 +86,8 @@ impl SequenceState {
     pub fn new() -> SequenceState {
         SequenceState {
             tag_stack: Vec::new(),
-            last_sequence: Sequence::Initial,
-            last_tag: String::new(),
-            next_tag: TagSequence::text(),
+            last: TagSequence::initial(),
+            next: TagSequence::text(),
             indent: 0,
         }
     }
@@ -153,28 +154,6 @@ impl TagRule {
     }
 }
 
-#[macro_export]
-macro_rules! tag_rule_set_internal {
-    (linefeed $ident:literal) => {
-        TagRule::line_feed($ident)
-    };
-    (indented $ident:literal) => {
-        TagRule::indented($ident)
-    };
-    (auto $ident:literal) => {
-        TagRule::auto_indent($ident)
-    };
-}
-
-#[macro_export]
-macro_rules! tag_rule_set {
-    ($($rule:tt $ident:literal),*) => {
-        vec![
-            $($crate::tag_rule_set_internal!($rule $ident),)*
-        ]
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct FormatChanges {
     /// Shall a new line (line feed) be inserted after inserting certain tag elements.
@@ -191,6 +170,14 @@ impl FormatChanges {
     pub fn nothing() -> FormatChanges {
         FormatChanges {
             new_line: false,
+            new_indent: None,
+        }
+    }
+
+    /// Insert a line feed without changing the current indenting.
+    pub fn lf() -> FormatChanges {
+        FormatChanges {
+            new_line: true,
             new_indent: None,
         }
     }
@@ -252,7 +239,7 @@ pub mod generic {
 
     #[macro_export]
     macro_rules! always_filter {
-        ($($tag:tt),*) => {
+        ($($tag:literal),*) => {
             vec![$($tag.to_string()),*]
         }
     }
@@ -303,15 +290,15 @@ pub mod generic {
 
         /// See trait description.
         fn check(&mut self, state: &SequenceState) -> FormatChanges {
-            if matches!(state.next_tag.0, Sequence::Closing) {
-                match state.last_sequence {
+            if matches!(state.next.0, Sequence::Closing) {
+                match state.last.0 {
                     Sequence::Opening => FormatChanges::may_lf(true),
                     _ => FormatChanges::indent_less(state.indent, self.0),
                 }
             } else {
-                match state.last_sequence {
+                match state.last.0 {
                     Sequence::Initial => FormatChanges::may_lf(true),
-                    Sequence::Opening => match state.next_tag.0 {
+                    Sequence::Opening => match state.next.0 {
                         Sequence::SelfClosing | Sequence::Text | Sequence::Opening => {
                             FormatChanges::indent_more(state.indent, self.0)
                         }
@@ -379,28 +366,37 @@ pub mod generic {
 
         /// See trait description.
         fn check(&mut self, state: &SequenceState) -> FormatChanges {
+            // Rules:
+            // 1. If opening and line-feed, do indent
+            // 2. If opening and always-filter, do indent
+            // 3. If closing and was indented, indent-back
+            // 4. if closing and always-filter, do lf
+            // 5. After initial, lf
+
+            let mut changes = FormatChanges::nothing();
             // If last one was an opening-tag, it definitely has to added an entry on stack_indent.
             // Separate checking, because it is too complicated to depict it on each possible case.
-            if matches!(state.last_sequence, Sequence::Opening) {
-                let opening_lf = matches!(state.next_tag.0, Sequence::LineFeed);
-                self.indent_stack
-                    .push(opening_lf || self.is_indent_filter(&state.last_tag));
-            }
-            // If last tag was the initial document sequence, also line feed always!
-            if matches!(state.last_sequence, Sequence::Initial) {
-                return FormatChanges::may_lf(true);
-            }
-            // Check next sequence and return FormatChanges
-            match state.next_tag.0 {
-                Sequence::Closing => {
-                    if let Some(true) = self.indent_stack.pop() {
-                        FormatChanges::indent_less(state.indent, self.indent_step)
-                    } else {
-                        FormatChanges::nothing()
-                    }
+            if matches!(state.last.0, Sequence::Opening) {
+                let do_lf = matches!(state.next.0, Sequence::LineFeed)
+                    || self.is_indent_filter(&state.last.1);
+                self.indent_stack.push(do_lf);
+                if do_lf {
+                    changes = FormatChanges::indent_more(state.indent, self.indent_step);
                 }
-                _ => FormatChanges::nothing(),
+            } else if matches!(state.next.0, Sequence::Closing) {
+                // Check next sequence and return FormatChanges
+                if let Some(true) = self.indent_stack.pop() {
+                    changes = FormatChanges::indent_less(state.indent, self.indent_step);
+                }
+            } else if matches!(state.last.0, Sequence::Closing) {
+                if self.is_indent_filter(&state.last.1) {
+                    changes = FormatChanges::lf();
+                }
+            } else if matches!(state.last.0, Sequence::Initial) {
+                // If last tag was the initial document sequence, also line feed always!
+                changes = FormatChanges::lf()
             }
+            changes
         }
     }
 }
