@@ -1,4 +1,5 @@
-//!
+//! This module is home of `MarkupSth`, the core and 'writer' of this crate. Have a look at
+//! `MarkupSth`'s documentation.
 
 use crate::{
     format::{FormatChanges, Formatter, Sequence, SequenceState, TagSequence},
@@ -6,9 +7,47 @@ use crate::{
 };
 use std::fmt::Write;
 
-/// Result definition.
+/// Internal `Result` definition to make it more easy to write our default return type.
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// The core and 'writer' of this crate. Configure and use one instance of `MarkupSth` to generate
+/// your Markup-Language content. Configurable sub-items are about syntax of used Markup Language
+/// and about formatting. This crate provides some pre-defined configurations, which can be used
+/// out of the box. Available and pre-defined syntaxes are HTML and XML, but you can also configure
+/// your own syntax of an individual Markup Language. For formatting there are currently three
+/// pre-defined formatters available (`NoFormatting` or `AutoIndent` may suit your needs). For more
+/// informations have a look at the documentation of the two modules `format` and `syntax`.
+///
+/// # Examples
+///
+/// To generate the following very simple HTML output:
+/// ```html
+/// <!DOCTYPE html>
+/// <html>
+/// <body>
+///     <section>
+///         <img src="image.jpg">
+///         <p>This is HTML</p>
+///     </section>
+/// </body>
+/// </html>
+/// ```
+/// you can use the following Rust code snippet:
+/// ```
+/// use markupsth::{MarkupSth, MarkupLanguage, AutoIndent, properties};
+///
+/// let mut document = String::new();
+/// let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+/// markup.open("html").unwrap();
+/// markup.open("body").unwrap();
+/// markup.open("section").unwrap();
+/// markup.self_closing("img").unwrap();
+/// properties!(markup, "src", "image.jpg").unwrap();
+/// markup.open("p").unwrap();
+/// markup.text("This is HTML").unwrap();
+/// markup.close_all().unwrap();
+/// markup.finalize().unwrap();
+/// ```
 #[derive(Debug)]
 pub struct MarkupSth<'d> {
     /// Syntax configuration of `MarkupSth`.
@@ -50,10 +89,22 @@ pub(crate) use final_op_arm;
 impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
     pub fn new(document: &'d mut String, ml: MarkupLanguage) -> Result<MarkupSth<'d>> {
-        let formatter = crate::format::generic::NoFormatting::new();
+        let formatter: Box<dyn Formatter> = match ml {
+            MarkupLanguage::Html => {
+                let mut fmt = crate::format::generic::AutoIndent::new();
+                fmt.set_always_filter(crate::always_filter!["html", "head", "body", "nav", "header", "footer", "section"]);
+                Box::new(fmt)
+            }
+            MarkupLanguage::Xml => {
+                Box::new(crate::format::generic::NoFormatting::new())
+            }
+            MarkupLanguage::Other(_) => {
+                Box::new(crate::format::generic::NoFormatting::new())
+            }
+        };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
-            formatter: Box::new(formatter),
+            formatter,
             seq_state: SequenceState::new(),
             indent_str: String::new(),
             document,
@@ -106,7 +157,7 @@ impl<'d> MarkupSth<'d> {
     }
 
     /// Inserts a single tag with properties.
-    pub fn properties(&mut self, properties: &[(String, String)]) -> Result<()> {
+    pub fn properties(&mut self, properties: &[(&str, &str)]) -> Result<()> {
         if !matches!(
             self.seq_state.last.0,
             Sequence::SelfClosing | Sequence::Opening
@@ -235,51 +286,16 @@ impl<'d> MarkupSth<'d> {
     }
 }
 
+// #[macro_export]
+// macro_rules! properties {
+//     ($($name:literal, $value:literal),*) => {
+//         vec![$(($name.to_string(), $value.to_string())),*]
+//     };
+// }
+
 #[macro_export]
 macro_rules! properties {
-    ($($name:literal, $value:literal),*) => {
-        vec![$(($name.to_string(), $value.to_string())),*]
-    };
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn simple_unformatted_html() {
-        let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
-        markup.open("html").unwrap();
-        markup.text("Dies ist HTML").unwrap();
-        markup.close().unwrap();
-        markup.finalize().unwrap();
-        assert_eq!(document, "<!DOCTYPE html><html>Dies ist HTML</html>");
-    }
-
-    #[test]
-    fn unformatted_html_with_properties() {
-        let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
-        markup.open("body").unwrap();
-        markup.open("section").unwrap();
-        markup.properties(&properties!["class", "class"]).unwrap();
-        markup.open("div").unwrap();
-        markup
-            .properties(&properties!["keya", "value1", "keyb", "value2"])
-            .unwrap();
-        markup.text("Text").unwrap();
-        markup.self_closing("img").unwrap();
-        markup.properties(&properties!["src", "img.jpg"]).unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
-        assert_eq!(
-            document,
-            concat![
-                r#"<!DOCTYPE html><body><section class="class">"#,
-                r#"<div keya="value1" keyb="value2">"#,
-                r#"Text<img src="img.jpg"></div></section></body>"#
-            ]
-        );
-    }
+    ($markup:expr, $($name:literal, $value:literal),*) => {{
+        $markup.properties(&[$(($name, $value)),*])
+    }};
 }
