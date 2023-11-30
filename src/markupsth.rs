@@ -92,15 +92,13 @@ impl<'d> MarkupSth<'d> {
         let formatter: Box<dyn Formatter> = match ml {
             MarkupLanguage::Html => {
                 let mut fmt = crate::format::generic::AutoIndent::new();
-                fmt.set_always_filter(crate::always_filter!["html", "head", "body", "nav", "header", "footer", "section"]);
+                fmt.set_always_filter(&[
+                    "head", "body", "nav", "header", "footer", "section"
+                ]);
                 Box::new(fmt)
             }
-            MarkupLanguage::Xml => {
-                Box::new(crate::format::generic::NoFormatting::new())
-            }
-            MarkupLanguage::Other(_) => {
-                Box::new(crate::format::generic::NoFormatting::new())
-            }
+            MarkupLanguage::Xml => Box::new(crate::format::generic::NoFormatting::new()),
+            MarkupLanguage::Other(_) => Box::new(crate::format::generic::NoFormatting::new()),
         };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
@@ -153,6 +151,14 @@ impl<'d> MarkupSth<'d> {
         let cfg = self.syntax.tag_pairs.as_ref().unwrap();
         self.document
             .write_fmt(format_args!("{}{}", cfg.closer_before, &tag))?;
+        Ok(())
+    }
+
+    /// TODO
+    pub fn open_close_w(&mut self, tag: &str, content: &str) -> Result<()> {
+        self.open(tag)?;
+        self.text(content)?;
+        self.close()?;
         Ok(())
     }
 

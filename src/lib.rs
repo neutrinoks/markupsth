@@ -1,25 +1,26 @@
 //! # notesth
 //!
-//! A very simple Rust library for writing almost all kinds of formatted text files, escpially 
-//! Markup files, such as HTML and XML. Its original purpose was to develop a Text-to-HTML 
-//! converter, but got slowly extended step-by-step. HTML and XML support is default, but you can
-//! also define your own Markup language syntax. There are also some pre-defined formatters to
-//! either non-format the Markup output or have some out-of-the-box formatting styles for a
-//! beautiful and readable HTML code.
+//! A very simple Rust library for writing almost all kinds of formatted text files, escpially
+//! Markup files, such as HTML and XML. Its original purpose was to develop a Text-to-HTML
+//! converter, but got slowly extended step-by-step. HTML and XML support is default and
+//! implemented, but you can also define your own Markup Language by configuring your individual
+//! syntax. There are also some pre-defined formatters to either no formatting at all the Markup
+//! output or have some out-of-the-box formatting styles for a beautiful and readable HTML code.
 //!
 //! For an individual syntax style (own Markup Language), have a look at the `syntax` module. For
-//! an own formatting style (write your own formatter to be used with this crate), have a look at
-//! the `format` module.
+//! an own formatting style (implement your own `Formatter` to be used with this crate), have a
+//! look at the `format` module.
 //!
-//! In case of interest, I am also willing to extend this crate any time by new Markup Languages or
-//! formatting styles. Feel free to contact me via Email.
+//! In case of interest, I am also willing to extend this crate any time by new Markup Languages,
+//! formatting styles, or any other kind of meaningful modifications. Feel free to contact me via
+//! Email provided in the manifest file.
 //!
 //! ## Examples from Scratch
 //!
-//! By using the an implemented Markup Language such as HTML or XML, and a pre-defined `Formatter`,
-//! you can quickly write some converter or HTML-generator. Such a quick-start guide can be seen in
-//! the following example.
-//! 
+//! By using an implemented Markup Language such as HTML or XML, and a pre-defined `Formatter`, you
+//! can quickly write some converter or HTML-generator. Such a quick-start guide can be seen in the
+//! following example.
+//!
 //! ### Simple Readable HTML
 //!
 //! To generate the following HTML code:
@@ -32,8 +33,10 @@
 //! </head>
 //! <body>
 //!     <section>
-//!         <img src="image.jpg">
-//!         <p>This is HTML</p>
+//!         <div>
+//!             <div><img src="image.jpg"></div>
+//!             <p>This is HTML</p>
+//!         </div>
 //!     </section>
 //! </body>
 //! </html>
@@ -45,7 +48,7 @@
 //! // Setup a document (String), MarkupSth and a default formatter.
 //! let mut document = String::new();
 //! let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
-//! 
+//!
 //! // Generate the content of example shown above.
 //! markup.open("html").unwrap();
 //! markup.open("head").unwrap();
@@ -64,6 +67,10 @@
 //! markup.text("This is HTML").unwrap();
 //! markup.close_all().unwrap();
 //! markup.finalize().unwrap();
+//! #assert_eq!(
+//! #   document,
+//! #   crate::testfile("formatted_html_auto_indent.html"),
+//! #);
 //! ```
 
 //! optional configuration for formatting and syntax description.
@@ -98,15 +105,18 @@ pub use crate::{
     format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::MarkupLanguage,
 };
 
+/// Crate internal support method for some unittests with external reference files.
+#[cfg(test)]
+fn testfile(name: &str) -> String {
+    let mut s = std::fs::read_to_string(&format!("tests/{}", name)).unwrap();
+    s.pop();
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn testfile(name: &str) -> String {
-        let mut s = std::fs::read_to_string(name).unwrap();
-        s.pop();
-        s
-    }
 
     #[test]
     fn simple_unformatted_html() {
@@ -165,7 +175,7 @@ mod tests {
         markup.finalize().unwrap();
         assert_eq!(
             document,
-            testfile("tests/formatted_html_always_indent.html"),
+            testfile("formatted_html_always_indent.html"),
         );
     }
 
@@ -173,19 +183,25 @@ mod tests {
     fn formatted_html_auto_indent() {
         let mut document = String::new();
         let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        markup.open("html").unwrap();
+        markup.new_line().unwrap();
         markup.open("head").unwrap();
-        markup.self_closing("meta").unwrap();
-        properties!(markup, "charset", "utf-8").unwrap();
+        markup.open_close_w("title", "New Website").unwrap();
+        markup.self_closing("link").unwrap();
+        properties!(markup, "href", "css/style.css", "rel", "stylesheet").unwrap();
         markup.close().unwrap();
         markup.open("body").unwrap();
         markup.open("section").unwrap();
         markup.open("div").unwrap();
         markup.new_line().unwrap();
         markup.open("div").unwrap();
-        markup.open("p").unwrap();
-        markup.text("Text").unwrap();
+        markup.self_closing("img").unwrap();
+        properties!(markup, "href", "image.jpg").unwrap();
+        markup.close().unwrap();
+        markup.new_line().unwrap();
+        markup.open_close_w("p", "Text").unwrap();
         markup.close_all().unwrap();
         markup.finalize().unwrap();
-        assert_eq!(document, testfile("tests/formatted_html_auto_indent.html"),);
+        assert_eq!(document, testfile("formatted_html_auto_indent.html"),);
     }
 }

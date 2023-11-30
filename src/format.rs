@@ -237,13 +237,6 @@ pub trait Formatter: std::fmt::Debug {
 pub mod generic {
     use super::*;
 
-    #[macro_export]
-    macro_rules! always_filter {
-        ($($tag:literal),*) => {
-            vec![$($tag.to_string()),*]
-        }
-    }
-
     /// A pre-defined `Formatter`. TODO
     #[derive(Debug)]
     pub struct NoFormatting;
@@ -326,11 +319,11 @@ pub mod generic {
         /// "body", "section":
         /// ```ignore
         /// let mut formatter = AutoIndent::new();
-        /// formatter.set_always_filter(always_filter!["head", "body", "section"]);
+        /// formatter.set_always_filter(&["head", "body", "section"]);
         /// ```
         /// Default is empty.
-        pub fn set_always_filter(&mut self, filter: Vec<String>) {
-            self.indent_filter = filter;
+        pub fn set_always_filter(&mut self, filter: &[&str]) {
+            self.indent_filter = filter.iter().map(|s| s.to_string()).collect();
         }
 
         // Internal check method if tag is contained in field `indent_filter`.
