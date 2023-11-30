@@ -383,10 +383,11 @@ pub mod generic {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use crate::{Formatter, Language, MarkupSth};
 
         #[test]
         fn all_initially_default() {
-            let fmtrs: Vec<Box<Formatter>> = vec![
+            let fmtrs: Vec<Box<dyn Formatter>> = vec![
                 Box::new(NoFormatting::new()),
                 Box::new(AlwaysIndentAlwaysLf::new()),
                 Box::new(AutoIndent::new()),

@@ -101,9 +101,7 @@ pub mod format;
 pub mod markupsth;
 pub mod syntax;
 
-pub use crate::{
-    format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::Language,
-};
+pub use crate::{format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::Language};
 
 /// Crate internal support method for some unittests with external reference files.
 #[cfg(test)]
