@@ -98,6 +98,100 @@ impl SequenceState {
             indent: 0,
         }
     }
+
+    #[cfg(test)]
+    pub(crate) fn teststate(last: TagSequence, next: TagSequence) -> SequenceState {
+        SequenceState {
+            tag_stack: Vec::new(),
+            last,
+            next,
+            indent: DEFAULT_INDENT,
+        }
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn initial_open(next: &str) -> SequenceState {
+        Self::teststate(TagSequence::initial(), TagSequence::opening(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_open(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::opening(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_close(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::closing(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_text(last: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::text())
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_lf(last: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::linefeed())
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_self_closing(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::self_closing(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn close_open(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::closing(last), TagSequence::opening(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn close_self_closing(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::closing(last), TagSequence::self_closing(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn close_close(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::closing(last), TagSequence::closing(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn close_lf(last: &str) -> SequenceState {
+        Self::teststate(TagSequence::closing(last), TagSequence::linefeed())
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn self_closing_close(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::self_closing(last), TagSequence::closing(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn self_closing_open(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::self_closing(last), TagSequence::opening(next))
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn self_closing_lf(last: &str) -> SequenceState {
+        Self::teststate(TagSequence::self_closing(last), TagSequence::linefeed())
+    }
+
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn text_close(last: &str) -> SequenceState {
+        Self::teststate(TagSequence::text(), TagSequence::closing(last))
+    }
 }
 
 impl Default for SequenceState {
@@ -110,7 +204,7 @@ impl Default for SequenceState {
 /// described by this definition. This can be a linefeed to be inserted with or without changes in
 /// current indenting. A change on current indenting will either be increased or decreased by the
 /// indenting step size, which can be adjusted in any implementation of `Formatter`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FormatChanges {
     /// Shall a new line (line feed) be inserted after inserting certain tag elements.
     pub new_line: bool,
@@ -186,6 +280,9 @@ pub trait Formatter: std::fmt::Debug {
     /// Returns the current indenting step size.
     fn get_indent_step_size(&self) -> usize;
 
+    /// Whatever may configurable, this function shall rest to its defaults.
+    fn reset_to_defaults(&mut self);
+
     /// Checks for format changes between the last and the next `TagSequence`. Neccessary changes
     /// regarding indenting and/or line-feed will be returned as `FormatChanges`. See description
     /// for more informations.
@@ -210,6 +307,8 @@ pub mod generic {
             DEFAULT_INDENT
         }
 
+        fn reset_to_defaults(&mut self) {}
+
         fn check(&mut self, _: &SequenceState) -> FormatChanges {
             FormatChanges::nothing()
         }
@@ -230,6 +329,10 @@ pub mod generic {
 
         fn get_indent_step_size(&self) -> usize {
             self.0
+        }
+
+        fn reset_to_defaults(&mut self) {
+            self.0 = DEFAULT_INDENT;
         }
 
         fn check(&mut self, state: &SequenceState) -> FormatChanges {
@@ -281,11 +384,19 @@ pub mod generic {
     }
 
     impl AutoIndent {
-        /// TODO
+        /// A default filter setup for HTML auto indenting will be applied.
         pub fn set_filter_default_html(&mut self) {
             self.set_filter_indent_always(&["head", "body", "section", "header", "footer", "nav"]);
             self.set_filter_lf_always(&["html"]);
-            self.set_filter_lf_closing(&["div"]);
+            self.set_filter_lf_closing(&["div", "link"]);
+        }
+
+        /// Resets all internal filters for tag to be formatted. See documentation on
+        /// `fltr_indent_always`, `fltr_lf_always`, and `fltr_lf_closing`.
+        pub fn reset_filters(&mut self) {
+            self.fltr_indent_always.clear();
+            self.fltr_lf_always.clear();
+            self.fltr_lf_closing.clear();
         }
 
         /// Tag names after which shall always be indented more, can be setup in this filter. For
@@ -311,18 +422,25 @@ pub mod generic {
         }
 
         // Internal check method if tag is contained in field `fltr_indent_always`.
-        fn is_tag_in_fltr(&self, tag: &str, fltr: AIFilter) -> bool {
+        fn is_ts_in_filter(&self, tagseq: &TagSequence, fltr: AIFilter) -> bool {
             let fltr: &Vec<String> = match fltr {
                 AIFilter::IndentAlways => &self.fltr_indent_always,
                 AIFilter::LfAlways => &self.fltr_lf_always,
                 AIFilter::LfClosing => &self.fltr_lf_closing,
             };
             for tf in fltr.iter() {
-                if tf == tag {
+                if tf == &tagseq.1 {
                     return true;
                 }
             }
             false
+        }
+
+        fn is_ts_in_fltr_aot(&self, tagseq: &TagSequence, fltr: AIFilter, seq: Sequence) -> bool {
+            if tagseq.0 != seq {
+                return false;
+            }
+            self.is_ts_in_filter(tagseq, fltr)
         }
     }
 
@@ -345,31 +463,47 @@ pub mod generic {
             self.indent_step
         }
 
+        fn reset_to_defaults(&mut self) {
+            self.fltr_indent_always.clear();
+            self.fltr_lf_always.clear();
+            self.fltr_lf_closing.clear();
+            self.indent_step = DEFAULT_INDENT;
+        }
+
         fn check(&mut self, state: &SequenceState) -> FormatChanges {
+            let next_seq_is = |seq: Sequence| state.next.0 == seq;
+            let last_seq_was = |seq: Sequence| state.last.0 == seq;
+
             let mut changes = FormatChanges::nothing();
 
-            if matches!(state.next.0, Sequence::Closing) {
+            if next_seq_is(Sequence::Closing) {
                 // Before a closing-tag we have to check for less-indenting and linefeed.
-                if let Some(true) = self.indent_stack.pop() {
-                    changes = FormatChanges::indent_less(state.indent, self.indent_step);
+                if !last_seq_was(Sequence::Opening) {
+                    if let Some(true) = self.indent_stack.pop() {
+                        changes = FormatChanges::indent_less(state.indent, self.indent_step);
+                    }
                 }
-            } else if matches!(state.last.0, Sequence::Opening) {
+            } else if last_seq_was(Sequence::Opening) {
                 // After an opening-tag linefeed and optional indenting can be desired
                 // Anyway, for each opening tag we add a flag for indenting on the internal stack.
-                let do_indent = (matches!(state.next.0, Sequence::LineFeed)
-                    && !self.is_tag_in_fltr(&state.last.1, AIFilter::LfAlways))
-                    || self.is_tag_in_fltr(&state.last.1, AIFilter::IndentAlways);
+                let do_indent = (next_seq_is(Sequence::LineFeed)
+                    && !self.is_ts_in_filter(&state.last, AIFilter::LfAlways))
+                    || self.is_ts_in_filter(&state.last, AIFilter::IndentAlways);
                 self.indent_stack.push(do_indent);
                 if do_indent {
                     changes = FormatChanges::indent_more(state.indent, self.indent_step);
-                } else if self.is_tag_in_fltr(&state.last.1, AIFilter::LfAlways) {
+                } else if self.is_ts_in_filter(&state.last, AIFilter::LfAlways) {
                     changes = FormatChanges::lf();
                 }
-            } else if matches!(state.last.0, Sequence::Closing) {
+            } else if last_seq_was(Sequence::Closing) {
                 // After a closing-tag a linefeed can be desired
-                if self.is_tag_in_fltr(&state.last.1, AIFilter::LfAlways)
-                    || self.is_tag_in_fltr(&state.last.1, AIFilter::LfClosing)
+                if self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
+                    || self.is_ts_in_filter(&state.last, AIFilter::LfClosing)
                 {
+                    changes = FormatChanges::lf();
+                }
+            } else if last_seq_was(Sequence::SelfClosing) {
+                if self.is_ts_in_fltr_aot(&state.last, AIFilter::LfClosing, Sequence::SelfClosing) {
                     changes = FormatChanges::lf();
                 }
             } else if matches!(state.last.0, Sequence::Initial) {
@@ -383,25 +517,42 @@ pub mod generic {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::{Formatter, Language, MarkupSth};
 
-        #[test]
-        fn all_initially_default() {
-            let fmtrs: Vec<Box<dyn Formatter>> = vec![
+        fn get_formatters_list() -> Vec<Box<dyn Formatter>> {
+            vec![
                 Box::new(NoFormatting::new()),
                 Box::new(AlwaysIndentAlwaysLf::new()),
                 Box::new(AutoIndent::new()),
-            ];
-            for fmt in fmtrs.iter() {
+            ]
+        }
+
+        fn indent_more() -> FormatChanges {
+            FormatChanges::indent_more(4, 4)
+        }
+
+        fn indent_less() -> FormatChanges {
+            FormatChanges::indent_less(4, 4)
+        }
+
+        #[test]
+        fn all_initially_default() {
+            for fmt in get_formatters_list().iter_mut() {
+                assert_eq!(fmt.get_indent_step_size(), DEFAULT_INDENT);
+            }
+        }
+
+        #[test]
+        fn after_reset_default_again() {
+            for fmt in get_formatters_list().iter_mut() {
+                fmt.set_indent_step_size(DEFAULT_INDENT + 1);
+                fmt.reset_to_defaults();
                 assert_eq!(fmt.get_indent_step_size(), DEFAULT_INDENT);
             }
         }
 
         #[test]
         fn auto_indenting_rule_always_indent() {
-            let mut doc = String::new();
-            let mut mls = MarkupSth::new(&mut doc, Language::Html);
-            // Define test cases first
+            todo!();
         }
 
         #[test]
@@ -411,7 +562,92 @@ pub mod generic {
 
         #[test]
         fn auto_indenting_rule_lf_closing() {
-            todo!();
+            let mut fmtr = Box::new(AutoIndent::new());
+            fmtr.reset_to_defaults();
+            fmtr.set_filter_lf_closing(&["html", "img"]);
+            
+            // Because opening tags are influencing the AutoIndent's state, consider open tags!!!
+
+            // Formatting between open and ... -> Indent more only after LF, nowhere else!
+            // <html></html> -> 0 
+            assert_eq!(
+                fmtr.check(&SequenceState::open_close("html", "html")),
+                FormatChanges::nothing()
+            );
+            // <html>Text -> 1
+            assert_eq!(
+                fmtr.check(&SequenceState::open_text("html")),
+                FormatChanges::nothing()
+            );
+            // Text</html> -> 0
+            assert_eq!(
+                fmtr.check(&SequenceState::text_close("html")),
+                FormatChanges::nothing()
+            );
+            // <html><img ...> -> 1
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("html", "img")),
+                FormatChanges::nothing()
+            );
+            // <img ...></html> -> 0
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "html")),
+                FormatChanges::lf()
+            );
+            assert_eq!(fmtr.check(&SequenceState::open_lf("html")), indent_more());
+            assert_eq!(fmtr.check(&SequenceState::open_lf("body")), indent_more());
+
+            // Formatting between self-closing and ... -> LF after "img" and LF, nowhere else!
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_open("img", "p")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_open("link", "p")),
+                FormatChanges::nothing()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "p")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("link", "p")),
+                FormatChanges::nothing()
+            );
+
+            // Formatting between close and ... -> LF after "html", "img" and LF, nowhere else!
+            assert_eq!(
+                fmtr.check(&SequenceState::close_open("html", "body")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_open("head", "body")),
+                FormatChanges::nothing()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_self_closing("html", "body")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_self_closing("head", "body")),
+                FormatChanges::nothing()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_close("html", "body")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_close("head", "body")),
+                FormatChanges::nothing()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_lf("html")),
+                FormatChanges::lf()
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_lf("head")),
+                FormatChanges::lf()
+            );
         }
     }
 }
