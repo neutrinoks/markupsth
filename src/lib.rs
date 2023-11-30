@@ -43,11 +43,11 @@
 //! ```
 //! you need to implement:
 //! ```
-//! use markupsth::{AutoIndent, MarkupLanguage, MarkupSth, properties};
+//! use markupsth::{AutoIndent, Language, MarkupSth, properties};
 //!
 //! // Setup a document (String), MarkupSth and a default formatter.
 //! let mut document = String::new();
-//! let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+//! let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
 //!
 //! // Generate the content of example shown above.
 //! markup.open("html").unwrap();
@@ -102,7 +102,7 @@ pub mod markupsth;
 pub mod syntax;
 
 pub use crate::{
-    format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::MarkupLanguage,
+    format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::Language,
 };
 
 /// Crate internal support method for some unittests with external reference files.
@@ -117,11 +117,10 @@ fn testfile(name: &str) -> String {
 mod tests {
     use super::*;
 
-
     #[test]
     fn simple_unformatted_html() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
         markup.set_formatter(Box::new(NoFormatting::new()));
         markup.open("html").unwrap();
         markup.text("This is HTML").unwrap();
@@ -133,7 +132,7 @@ mod tests {
     #[test]
     fn unformatted_html_with_properties() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
         markup.set_formatter(Box::new(NoFormatting::new()));
         markup.open("body").unwrap();
         markup.open("section").unwrap();
@@ -160,7 +159,7 @@ mod tests {
     #[test]
     fn formatted_html_always_indent() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
         markup.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
         markup.open("head").unwrap();
         markup.self_closing("meta").unwrap();
@@ -173,16 +172,13 @@ mod tests {
         markup.text("Text").unwrap();
         markup.close_all().unwrap();
         markup.finalize().unwrap();
-        assert_eq!(
-            document,
-            testfile("formatted_html_always_indent.html"),
-        );
+        assert_eq!(document, testfile("formatted_html_always_indent.html"),);
     }
 
     #[test]
     fn formatted_html_auto_indent() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
         markup.open("html").unwrap();
         markup.new_line().unwrap();
         markup.open("head").unwrap();

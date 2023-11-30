@@ -3,7 +3,7 @@
 
 use crate::{
     format::{FormatChanges, Formatter, Sequence, SequenceState, TagSequence},
-    syntax::{MarkupLanguage, SyntaxConfig},
+    syntax::{Language, SyntaxConfig},
 };
 use std::fmt::Write;
 
@@ -34,10 +34,10 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// ```
 /// you can use the following Rust code snippet:
 /// ```
-/// use markupsth::{MarkupSth, MarkupLanguage, AutoIndent, properties};
+/// use markupsth::{MarkupSth, Language, AutoIndent, properties};
 ///
 /// let mut document = String::new();
-/// let mut markup = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+/// let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
 /// markup.open("html").unwrap();
 /// markup.open("body").unwrap();
 /// markup.open("section").unwrap();
@@ -88,17 +88,15 @@ pub(crate) use final_op_arm;
 
 impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
-    pub fn new(document: &'d mut String, ml: MarkupLanguage) -> Result<MarkupSth<'d>> {
+    pub fn new(document: &'d mut String, ml: Language) -> Result<MarkupSth<'d>> {
         let formatter: Box<dyn Formatter> = match ml {
-            MarkupLanguage::Html => {
+            Language::Html => {
                 let mut fmt = crate::format::generic::AutoIndent::new();
-                fmt.set_always_filter(&[
-                    "head", "body", "nav", "header", "footer", "section"
-                ]);
+                fmt.set_filter_default_html();
                 Box::new(fmt)
             }
-            MarkupLanguage::Xml => Box::new(crate::format::generic::NoFormatting::new()),
-            MarkupLanguage::Other(_) => Box::new(crate::format::generic::NoFormatting::new()),
+            Language::Xml => Box::new(crate::format::generic::NoFormatting::new()),
+            Language::Other(_) => Box::new(crate::format::generic::NoFormatting::new()),
         };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),

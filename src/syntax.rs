@@ -4,21 +4,21 @@
 //!
 //! ### Examples for available configurations
 //!
-//! To use the pre-defined configuration for HTML, pass `MarkupLanguage::Html` when creating the
+//! To use the pre-defined configuration for HTML, pass `Language::Html` when creating the
 //! `MarkupSth` struct:
 //!    ```
-//!    use markupsth::{MarkupSth, MarkupLanguage};
+//!    use markupsth::{MarkupSth, Language};
 //!
 //!    let mut document = String::new();
-//!    let mut markupsth = MarkupSth::new(&mut document, MarkupLanguage::Html).unwrap();
+//!    let mut markupsth = MarkupSth::new(&mut document, Language::Html).unwrap();
 //!    ```
 //!
 //! ### Example for defining your own configuration
 //!
 //! To use an individual configuration for another ML, pass the fully defined `Config` struct via
-//! `MarkupLanguage::Other(cfg)`:
+//! `Language::Other(cfg)`:
 //!    ```
-//!    use markupsth::{MarkupSth, MarkupLanguage};
+//!    use markupsth::{MarkupSth, Language};
 //!    use markupsth::syntax::{SyntaxConfig, Insertion::*, TagPairConfig, SelfClosingTagConfig};
 //!
 //!    let cfg = SyntaxConfig {
@@ -37,7 +37,7 @@
 //!    };
 //!
 //!    let mut document = String::new();
-//!    let mut markupsth = MarkupSth::new(&mut document, MarkupLanguage::Other(cfg)).unwrap();
+//!    let mut markupsth = MarkupSth::new(&mut document, Language::Other(cfg)).unwrap();
 //!    ```
 
 use std::fmt;
@@ -129,16 +129,16 @@ pub struct SyntaxConfig {
 
 /// Selector for available pre-defined syntax configurations and wrapper for passing your own.
 #[derive(Clone, Debug)]
-pub enum MarkupLanguage {
+pub enum Language {
     Html,
     Xml,
     Other(SyntaxConfig),
 }
 
-impl From<MarkupLanguage> for SyntaxConfig {
-    fn from(cfg_sel: MarkupLanguage) -> SyntaxConfig {
+impl From<Language> for SyntaxConfig {
+    fn from(cfg_sel: Language) -> SyntaxConfig {
         match cfg_sel {
-            MarkupLanguage::Html => SyntaxConfig {
+            Language::Html => SyntaxConfig {
                 doctype: Some(r#"<!DOCTYPE html>"#.to_string()),
                 self_closing: Some(SelfClosingTagConfig {
                     before: Single('<'),
@@ -160,7 +160,7 @@ impl From<MarkupLanguage> for SyntaxConfig {
                     value_separator: Single(' '),
                 }),
             },
-            MarkupLanguage::Xml => SyntaxConfig {
+            Language::Xml => SyntaxConfig {
                 doctype: Some(r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string()),
                 self_closing: Some(SelfClosingTagConfig {
                     before: Single('<'),
@@ -182,7 +182,7 @@ impl From<MarkupLanguage> for SyntaxConfig {
                     value_separator: Single(' '),
                 }),
             },
-            MarkupLanguage::Other(cfg) => cfg,
+            Language::Other(cfg) => cfg,
         }
     }
 }
@@ -193,9 +193,9 @@ mod tests {
 
     #[test]
     fn config_selector_smoke_test() {
-        let _ = SyntaxConfig::from(MarkupLanguage::Html);
-        let cfg = SyntaxConfig::from(MarkupLanguage::Xml);
-        let _ = SyntaxConfig::from(MarkupLanguage::Other(cfg));
+        let _ = SyntaxConfig::from(Language::Html);
+        let cfg = SyntaxConfig::from(Language::Xml);
+        let _ = SyntaxConfig::from(Language::Other(cfg));
     }
 
     #[test]
