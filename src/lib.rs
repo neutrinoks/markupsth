@@ -43,30 +43,30 @@
 //! ```
 //! you need to implement:
 //! ```
-//! use markupsth::{AutoIndent, Language, MarkupSth, properties};
+//! use mussth::{AutoIndent, Language, MarkupSth, properties};
 //!
 //! // Setup a document (String), MarkupSth and a default formatter.
 //! let mut document = String::new();
-//! let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
+//! let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 //!
 //! // Generate the content of example shown above.
-//! markup.open("html").unwrap();
-//! markup.open("head").unwrap();
-//! markup.open("title").unwrap();
-//! markup.text("New Website").unwrap();
-//! markup.close().unwrap();
-//! markup.new_line().unwrap();
-//! markup.self_closing("link").unwrap();
-//! properties!(markup, "href", "css/style.css", "rel", "stylesheet").unwrap();
-//! markup.close();
-//! markup.open("body").unwrap();
-//! markup.open("section").unwrap();
-//! markup.self_closing("img").unwrap();
-//! properties!(markup, "src", "image.jpg").unwrap();
-//! markup.open("p").unwrap();
-//! markup.text("This is HTML").unwrap();
-//! markup.close_all().unwrap();
-//! markup.finalize().unwrap();
+//! mus.open("html").unwrap();
+//! mus.open("head").unwrap();
+//! mus.open("title").unwrap();
+//! mus.text("New Website").unwrap();
+//! mus.close().unwrap();
+//! mus.new_line().unwrap();
+//! mus.self_closing("link").unwrap();
+//! properties!(mus, "href", "css/style.css", "rel", "stylesheet").unwrap();
+//! mus.close();
+//! mus.open("body").unwrap();
+//! mus.open("section").unwrap();
+//! mus.self_closing("img").unwrap();
+//! properties!(mus, "src", "image.jpg").unwrap();
+//! mus.open("p").unwrap();
+//! mus.text("This is HTML").unwrap();
+//! mus.close_all().unwrap();
+//! mus.finalize().unwrap();
 //! #assert_eq!(
 //! #   document,
 //! #   crate::testfile("formatted_html_auto_indent.html"),
@@ -118,32 +118,32 @@ mod tests {
     #[test]
     fn simple_unformatted_html() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
-        markup.set_formatter(Box::new(NoFormatting::new()));
-        markup.open("html").unwrap();
-        markup.text("This is HTML").unwrap();
-        markup.close().unwrap();
-        markup.finalize().unwrap();
+        let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
+        mus.set_formatter(Box::new(NoFormatting::new()));
+        mus.open("html").unwrap();
+        mus.text("This is HTML").unwrap();
+        mus.close().unwrap();
+        mus.finalize().unwrap();
         assert_eq!(document, "<!DOCTYPE html><html>This is HTML</html>");
     }
 
     #[test]
     fn unformatted_html_with_properties() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
-        markup.set_formatter(Box::new(NoFormatting::new()));
-        markup.open("body").unwrap();
-        markup.open("section").unwrap();
-        markup.properties(&[("class", "class")]).unwrap();
-        markup.open("div").unwrap();
-        markup
+        let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
+        mus.set_formatter(Box::new(NoFormatting::new()));
+        mus.open("body").unwrap();
+        mus.open("section").unwrap();
+        mus.properties(&[("class", "class")]).unwrap();
+        mus.open("div").unwrap();
+        mus
             .properties(&[("keya", "value1"), ("keyb", "value2")])
             .unwrap();
-        markup.text("Text").unwrap();
-        markup.self_closing("img").unwrap();
-        properties!(markup, "src", "img.jpg").unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
+        mus.text("Text").unwrap();
+        mus.self_closing("img").unwrap();
+        properties!(mus, "src", "img.jpg").unwrap();
+        mus.close_all().unwrap();
+        mus.finalize().unwrap();
         assert_eq!(
             document,
             concat![
@@ -157,45 +157,43 @@ mod tests {
     #[test]
     fn formatted_html_always_indent() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
-        markup.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
-        markup.open("head").unwrap();
-        markup.self_closing("meta").unwrap();
-        properties!(markup, "charset", "utf-8").unwrap();
-        markup.close().unwrap();
-        markup.open("body").unwrap();
-        markup.open("section").unwrap();
-        markup.open("div").unwrap();
-        markup.open("p").unwrap();
-        markup.text("Text").unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
+        let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
+        mus.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
+        mus.open("head").unwrap();
+        mus.self_closing("meta").unwrap();
+        properties!(mus, "charset", "utf-8").unwrap();
+        mus.close().unwrap();
+        mus.open("body").unwrap();
+        mus.open("section").unwrap();
+        mus.open("div").unwrap();
+        mus.open("p").unwrap();
+        mus.text("Text").unwrap();
+        mus.close_all().unwrap();
+        mus.finalize().unwrap();
         assert_eq!(document, testfile("formatted_html_always_indent.html"),);
     }
 
     #[test]
     fn formatted_html_auto_indent() {
         let mut document = String::new();
-        let mut markup = MarkupSth::new(&mut document, Language::Html).unwrap();
-        markup.open("html").unwrap();
-        markup.new_line().unwrap();
-        markup.open("head").unwrap();
-        markup.open_close_w("title", "New Website").unwrap();
-        markup.self_closing("link").unwrap();
-        properties!(markup, "href", "css/style.css", "rel", "stylesheet").unwrap();
-        markup.close().unwrap();
-        markup.open("body").unwrap();
-        markup.open("section").unwrap();
-        markup.open("div").unwrap();
-        markup.new_line().unwrap();
-        markup.open("div").unwrap();
-        markup.self_closing("img").unwrap();
-        properties!(markup, "href", "image.jpg").unwrap();
-        markup.close().unwrap();
-        markup.new_line().unwrap();
-        markup.open_close_w("p", "Text").unwrap();
-        markup.close_all().unwrap();
-        markup.finalize().unwrap();
+        let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
+        mus.open("html").unwrap();
+        mus.open("head").unwrap();
+        mus.open_close_w("title", "New Website").unwrap();
+        mus.self_closing("link").unwrap();
+        properties!(mus, "href", "css/style.css", "rel", "stylesheet").unwrap();
+        mus.close().unwrap();
+        mus.open("body").unwrap();
+        mus.open("section").unwrap();
+        mus.open("div").unwrap();
+        mus.new_line().unwrap();
+        mus.open("div").unwrap();
+        mus.self_closing("img").unwrap();
+        properties!(mus, "src", "image.jpg").unwrap();
+        mus.close().unwrap();
+        mus.open_close_w("p", "This is HTML").unwrap();
+        mus.close_all().unwrap();
+        mus.finalize().unwrap();
         assert_eq!(document, testfile("formatted_html_auto_indent.html"),);
     }
 }

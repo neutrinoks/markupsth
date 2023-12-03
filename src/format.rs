@@ -402,7 +402,7 @@ pub mod generic {
             self.set_filter_indent_always(&["head", "body", "section", "header", "footer", "nav"])
                 .unwrap();
             self.set_filter_lf_always(&["html"]).unwrap();
-            self.set_filter_lf_closing(&["div", "link"]).unwrap();
+            self.set_filter_lf_closing(&["title", "link", "div"]).unwrap();
         }
 
         /// Resets all internal filters for tag to be formatted. See documentation on
@@ -531,7 +531,8 @@ pub mod generic {
                 } else if let Some(true) = self.indent_stack.pop() {
                     // otherwise we can check for a less-indenting on indent_stack!
                     changes = FormatChanges::indent_less(state.indent, self.indent_step);
-                } else if self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
+                } else if self.is_ts_in_fltr_aot(&state.last, AIFilter::IndentAlways, Sequence::Closing)
+                    || self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
                     || self.is_ts_in_fltr_aot(&state.last, AIFilter::LfClosing, Sequence::Closing)
                     || self.is_ts_in_fltr_aot(
                         &state.last,
@@ -558,7 +559,8 @@ pub mod generic {
                     }
                     Sequence::Closing => {
                         // After a closing-tag a LINEFEED can be desired
-                        if self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
+                        if self.is_ts_in_filter(&state.last, AIFilter::IndentAlways)
+                            || self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
                             || self.is_ts_in_filter(&state.last, AIFilter::LfClosing)
                         {
                             changes = FormatChanges::lf();
@@ -839,7 +841,7 @@ pub mod generic {
             );
             assert_eq!(
                 fmtr.check(&SequenceState::close_close("head", "html")),
-                NOTHING
+                LINEFEED
             );
             assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
