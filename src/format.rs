@@ -109,11 +109,11 @@ impl SequenceState {
         }
     }
 
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn initial_open(next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::initial(), TagSequence::opening(next))
-    // }
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn initial_open(next: &str) -> SequenceState {
+        Self::teststate(TagSequence::initial(), TagSequence::opening(next))
+    }
 
     /// Only for testing purposes used internally.
     #[cfg(test)]
@@ -145,29 +145,11 @@ impl SequenceState {
         Self::teststate(TagSequence::opening(last), TagSequence::self_closing(next))
     }
 
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn close_open(last: &str, next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::closing(last), TagSequence::opening(next))
-    // }
-
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn close_self_closing(last: &str, next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::closing(last), TagSequence::self_closing(next))
-    // }
-
     /// Only for testing purposes used internally.
     #[cfg(test)]
     pub(crate) fn close_close(last: &str, next: &str) -> SequenceState {
         Self::teststate(TagSequence::closing(last), TagSequence::closing(next))
     }
-
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn close_lf(last: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::closing(last), TagSequence::LINEFEED())
-    // }
 
     /// Only for testing purposes used internally.
     #[cfg(test)]
@@ -186,18 +168,6 @@ impl SequenceState {
     pub(crate) fn self_closing_close(last: &str, next: &str) -> SequenceState {
         Self::teststate(TagSequence::self_closing(last), TagSequence::closing(next))
     }
-
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn self_closing_open(last: &str, next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::self_closing(last), TagSequence::opening(next))
-    // }
-
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn self_closing_lf(last: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::self_closing(last), TagSequence::LINEFEED())
-    // }
 
     /// Only for testing purposes used internally.
     #[cfg(test)]
@@ -402,7 +372,8 @@ pub mod generic {
             self.set_filter_indent_always(&["head", "body", "section", "header", "footer", "nav"])
                 .unwrap();
             self.set_filter_lf_always(&["html"]).unwrap();
-            self.set_filter_lf_closing(&["title", "link", "div"]).unwrap();
+            self.set_filter_lf_closing(&["title", "link", "div"])
+                .unwrap();
         }
 
         /// Resets all internal filters for tag to be formatted. See documentation on
@@ -531,8 +502,11 @@ pub mod generic {
                 } else if let Some(true) = self.indent_stack.pop() {
                     // otherwise we can check for a less-indenting on indent_stack!
                     changes = FormatChanges::indent_less(state.indent, self.indent_step);
-                } else if self.is_ts_in_fltr_aot(&state.last, AIFilter::IndentAlways, Sequence::Closing)
-                    || self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
+                } else if self.is_ts_in_fltr_aot(
+                    &state.last,
+                    AIFilter::IndentAlways,
+                    Sequence::Closing,
+                ) || self.is_ts_in_filter(&state.last, AIFilter::LfAlways)
                     || self.is_ts_in_fltr_aot(&state.last, AIFilter::LfClosing, Sequence::Closing)
                     || self.is_ts_in_fltr_aot(
                         &state.last,
@@ -637,9 +611,14 @@ pub mod generic {
         // special cases like <div></div>.
 
         #[test]
+        fn auto_indenting_after_initial() {
+            let mut fmtr = Box::new(AutoIndent::new());
+            assert_eq!(fmtr.check(&SequenceState::initial_open("html")), LINEFEED);
+        }
+
+        #[test]
         fn auto_indenting_rule_always_indent() {
             let mut fmtr = Box::new(AutoIndent::new());
-            fmtr.reset_to_defaults();
             fmtr.set_filter_indent_always(&["html"]).unwrap();
 
             // Test: Auto-indenting works on non-registered tags with manual LF.
@@ -693,7 +672,6 @@ pub mod generic {
         #[test]
         fn auto_indenting_rule_lf_always() {
             let mut fmtr = Box::new(AutoIndent::new());
-            fmtr.reset_to_defaults();
             fmtr.set_filter_lf_always(&["html"]).unwrap();
 
             // Test: Auto-LF after opening-tag and after closing-tag of registered tags.
@@ -746,7 +724,6 @@ pub mod generic {
         #[test]
         fn auto_indenting_rule_lf_closing() {
             let mut fmtr = Box::new(AutoIndent::new());
-            fmtr.reset_to_defaults();
             fmtr.set_filter_lf_closing(&["html", "img"]).unwrap();
 
             // Test: open-close works without problems, no formatting at all in between.
@@ -809,18 +786,17 @@ pub mod generic {
             let mut fmtr = Box::new(AutoIndent::new());
 
             // Test some error messages
-            fmtr.reset_to_defaults();
             fmtr.set_filter_indent_always(&["html", "body"]).unwrap();
             assert_err!(fmtr.set_filter_lf_always(&["html", "head"]));
             fmtr.set_filter_lf_closing(&["html", "body"]).unwrap();
-
             fmtr.reset_to_defaults();
+
             fmtr.set_filter_lf_always(&["html", "body"]).unwrap();
             assert_err!(fmtr.set_filter_indent_always(&["html", "head"]));
             assert_err!(fmtr.set_filter_lf_closing(&["body", "header"]));
+            fmtr.reset_to_defaults();
 
             // Now, test setup for the operational test cases.
-            fmtr.reset_to_defaults();
             fmtr.set_filter_indent_always(&["head", "body"]).unwrap();
             fmtr.set_filter_lf_always(&["html"]).unwrap();
             fmtr.set_filter_lf_closing(&["body", "div"]).unwrap();

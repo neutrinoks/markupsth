@@ -43,7 +43,7 @@
 //! ```
 //! you need to implement:
 //! ```
-//! use mussth::{AutoIndent, Language, MarkupSth, properties};
+//! use markupsth::{AutoIndent, Language, MarkupSth, properties};
 //!
 //! // Setup a document (String), MarkupSth and a default formatter.
 //! let mut document = String::new();
@@ -52,50 +52,52 @@
 //! // Generate the content of example shown above.
 //! mus.open("html").unwrap();
 //! mus.open("head").unwrap();
-//! mus.open("title").unwrap();
-//! mus.text("New Website").unwrap();
-//! mus.close().unwrap();
-//! mus.new_line().unwrap();
+//! mus.open_close_w("title", "New Website").unwrap();
 //! mus.self_closing("link").unwrap();
 //! properties!(mus, "href", "css/style.css", "rel", "stylesheet").unwrap();
-//! mus.close();
+//! mus.close().unwrap();
 //! mus.open("body").unwrap();
 //! mus.open("section").unwrap();
+//! mus.open("div").unwrap();
+//! mus.new_line().unwrap();
+//! mus.open("div").unwrap();
 //! mus.self_closing("img").unwrap();
 //! properties!(mus, "src", "image.jpg").unwrap();
-//! mus.open("p").unwrap();
-//! mus.text("This is HTML").unwrap();
+//! mus.close().unwrap();
+//! mus.open_close_w("p", "This is HTML").unwrap();
 //! mus.close_all().unwrap();
 //! mus.finalize().unwrap();
-//! #assert_eq!(
-//! #   document,
-//! #   crate::testfile("formatted_html_auto_indent.html"),
-//! #);
+//! # assert_eq!(document, markupsth::testfile("formatted_html_auto_indent.html"));
 //! ```
-
-//! optional configuration for formatting and syntax description.
 //!
-//! It is a basis
-//! for various kinds of writer-types, written in Rust. The library assists in formatting, escpially
-//! indenting and adding line-feeds when writing. If you want to generate some kind of code, e.g. HTML,
-//! Rust etc. this is very useful.
+//! ### Simple XML Example
 //!
-//! ### Rust-boundaries
-//!
-//! At the moment there is only a version available, that implements ```std::fmt::Write```. If requested
-//! a version supporting ```std::io::Write``` could also be implemented. Just contact me.
-//!
-//! ### Examples
-//!
-//! To generate the following HTML output:
-//! ```html
-//! <div>
-//!     <p>Some interesting written here</p>
-//! </div>
+//! To generate the following output:
+//! ```xml
+//! <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+//! <directory>
+//!     <title>Wikipedia List of Cities</title>
+//!     <entry>
+//!         <keyword>Hamburg</keyword>
+//!         <entrystext>Hamburg is the residence of ...</entrystext>
+//!     </entry>
+//!     <entry>
+//!         <keyword>Munich</keyword>
+//!         <entrystext>Munich is the residence of ...</entrystext>
+//!     </entry>
+//! </directory>
 //! ```
-//! an implementation would look like:
+//! you have to implement:
+//! ```
+//! use markupsth::{AutoIndent, Language, MarkupSth, properties};
 //!
-//! Another formatted text example:
+//! // Setup a document (String), MarkupSth and a default formatter.
+//! let mut document = String::new();
+//! let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
+//!
+//! // Generate the content of example shown above.
+//! todo!();
+//! ```
 
 pub mod format;
 pub mod markupsth;
@@ -104,8 +106,7 @@ pub mod syntax;
 pub use crate::{format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::Language};
 
 /// Crate internal support method for some unittests with external reference files.
-#[cfg(test)]
-fn testfile(name: &str) -> String {
+pub fn testfile(name: &str) -> String {
     let mut s = std::fs::read_to_string(&format!("tests/{}", name)).unwrap();
     s.pop();
     s
@@ -136,8 +137,7 @@ mod tests {
         mus.open("section").unwrap();
         mus.properties(&[("class", "class")]).unwrap();
         mus.open("div").unwrap();
-        mus
-            .properties(&[("keya", "value1"), ("keyb", "value2")])
+        mus.properties(&[("keya", "value1"), ("keyb", "value2")])
             .unwrap();
         mus.text("Text").unwrap();
         mus.self_closing("img").unwrap();
@@ -195,5 +195,41 @@ mod tests {
         mus.close_all().unwrap();
         mus.finalize().unwrap();
         assert_eq!(document, testfile("formatted_html_auto_indent.html"),);
+    }
+
+    #[test]
+    fn formatted_xml_auto_indent() {
+        let do_entry = |mus: &mut MarkupSth, name: &str| {
+            mus.open("entry").unwrap();
+            mus.open("keyword").unwrap();
+            mus.text(name).unwrap();
+            mus.close().unwrap();
+            mus.open("entrystext").unwrap();
+            mus.text(&format!("{} is the residence of ...", name))
+                .unwrap();
+            mus.close().unwrap();
+            mus.close().unwrap();
+        };
+
+        let mut document = String::new();
+        let mut mus = MarkupSth::new(&mut document, Language::Xml).unwrap();
+        todo!();
+        mus.formatter
+            .set_filter_indent_always(&["directory", "entry"])
+            .unwrap();
+        mus.formatter
+            .set_filter_lf_closing(&["title", "keyword", "entrystext"])
+            .unwrap();
+
+        mus.open("directory").unwrap();
+        mus.open("title").unwrap();
+        mus.text("Wikipedia List of Cities").unwrap();
+        mus.close().unwrap();
+        do_entry(&mut mus, "Hamburg");
+        do_entry(&mut mus, "Munich");
+        mus.close_all().unwrap();
+        mus.finalize().unwrap();
+
+        assert_eq!(document, testfile("formatted_xml_auto_indent.xml"));
     }
 }

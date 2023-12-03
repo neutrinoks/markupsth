@@ -95,8 +95,8 @@ impl<'d> MarkupSth<'d> {
                 fmt.set_filter_default_html();
                 Box::new(fmt)
             }
-            Language::Xml => Box::new(crate::format::generic::NoFormatting::new()),
-            Language::Other(_) => Box::new(crate::format::generic::NoFormatting::new()),
+            Language::Xml => Box::new(crate::format::generic::AutoIndent::new()),
+            Language::Other(_) => Box::new(crate::format::generic::AutoIndent::new()),
         };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),

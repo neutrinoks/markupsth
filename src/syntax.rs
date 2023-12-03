@@ -161,7 +161,9 @@ impl From<Language> for SyntaxConfig {
                 }),
             },
             Language::Xml => SyntaxConfig {
-                doctype: Some(r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string()),
+                doctype: Some(
+                    r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#.to_string(),
+                ),
                 self_closing: Some(SelfClosingTagConfig {
                     before: Single('<'),
                     after: Triple(' ', '/', '>'),
