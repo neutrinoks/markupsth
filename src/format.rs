@@ -115,11 +115,11 @@ impl SequenceState {
     //     Self::teststate(TagSequence::initial(), TagSequence::opening(next))
     // }
 
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn open_open(last: &str, next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::opening(last), TagSequence::opening(next))
-    // }
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn open_open(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::opening(last), TagSequence::opening(next))
+    }
 
     /// Only for testing purposes used internally.
     #[cfg(test)]
@@ -157,11 +157,11 @@ impl SequenceState {
     //     Self::teststate(TagSequence::closing(last), TagSequence::self_closing(next))
     // }
 
-    // /// Only for testing purposes used internally.
-    // #[cfg(test)]
-    // pub(crate) fn close_close(last: &str, next: &str) -> SequenceState {
-    //     Self::teststate(TagSequence::closing(last), TagSequence::closing(next))
-    // }
+    /// Only for testing purposes used internally.
+    #[cfg(test)]
+    pub(crate) fn close_close(last: &str, next: &str) -> SequenceState {
+        Self::teststate(TagSequence::closing(last), TagSequence::closing(next))
+    }
 
     // /// Only for testing purposes used internally.
     // #[cfg(test)]
@@ -389,6 +389,7 @@ pub mod generic {
     // 1. Always LINEFEEDs but no indenting, e.g. <html>
     // 2. Always content indented, e.g. <body>, <head>
     // 3. Linefeed after the closing tag, e.g. </div>
+    #[derive(Copy, Clone, Debug)]
     enum AIFilter {
         IndentAlways,
         LfAlways,
@@ -398,9 +399,10 @@ pub mod generic {
     impl AutoIndent {
         /// A default filter setup for HTML auto indenting will be applied.
         pub fn set_filter_default_html(&mut self) {
-            self.set_filter_indent_always(&["head", "body", "section", "header", "footer", "nav"]);
-            self.set_filter_lf_always(&["html"]);
-            self.set_filter_lf_closing(&["div", "link"]);
+            self.set_filter_indent_always(&["head", "body", "section", "header", "footer", "nav"])
+                .unwrap();
+            self.set_filter_lf_always(&["html"]).unwrap();
+            self.set_filter_lf_closing(&["div", "link"]).unwrap();
         }
 
         /// Resets all internal filters for tag to be formatted. See documentation on
@@ -419,18 +421,51 @@ pub mod generic {
         /// formatter.set_filter_indent_always(&["head", "body", "section"]);
         /// ```
         /// Default is empty.
-        pub fn set_filter_indent_always(&mut self, filter: &[&str]) {
+        pub fn set_filter_indent_always(&mut self, filter: &[&str]) -> Result<(), String> {
+            self.check_other_filter(filter, AIFilter::IndentAlways, AIFilter::LfAlways)?;
             self.fltr_indent_always = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
         }
 
         /// TODO
-        pub fn set_filter_lf_always(&mut self, filter: &[&str]) {
+        pub fn set_filter_lf_always(&mut self, filter: &[&str]) -> Result<(), String> {
+            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::IndentAlways)?;
+            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::LfClosing)?;
             self.fltr_lf_always = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
         }
 
         /// TODO
-        pub fn set_filter_lf_closing(&mut self, filter: &[&str]) {
+        pub fn set_filter_lf_closing(&mut self, filter: &[&str]) -> Result<(), String> {
+            self.check_other_filter(filter, AIFilter::LfClosing, AIFilter::LfAlways)?;
             self.fltr_lf_closing = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
+        }
+
+        // Internal method to check if tags are in another filter too.
+        fn check_other_filter(
+            &self,
+            tags: &[&str],
+            fltr: AIFilter,
+            other: AIFilter,
+        ) -> Result<(), String> {
+            let errtags: Vec<String> = tags
+                .iter()
+                .filter(|t| self.is_ts_in_filter(&TagSequence::opening(t), other))
+                .map(|t| t.to_string())
+                .collect();
+            if errtags.is_empty() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "{}_({:?}), {} {:?} too: {:?}",
+                    "AutoIndent::set_filter",
+                    fltr,
+                    "trying to add tags which have already been added to filter",
+                    other,
+                    errtags
+                ))
+            }
         }
 
         // Internal check method if tag is contained in field `fltr_indent_always`.
@@ -552,11 +587,24 @@ pub mod generic {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use totems::assert_err;
 
-        const NOTHING: FormatChanges = FormatChanges{ new_line: false, new_indent: None };
-        const LINEFEED: FormatChanges  = FormatChanges{ new_line: true, new_indent: None };
-        const INDENT_LESS: FormatChanges  = FormatChanges{ new_line: true, new_indent: Some(0) };
-        const INDENT_MORE: FormatChanges  = FormatChanges{ new_line: true, new_indent: Some(8) };
+        const NOTHING: FormatChanges = FormatChanges {
+            new_line: false,
+            new_indent: None,
+        };
+        const LINEFEED: FormatChanges = FormatChanges {
+            new_line: true,
+            new_indent: None,
+        };
+        const INDENT_LESS: FormatChanges = FormatChanges {
+            new_line: true,
+            new_indent: Some(0),
+        };
+        const INDENT_MORE: FormatChanges = FormatChanges {
+            new_line: true,
+            new_indent: Some(8),
+        };
 
         fn get_formatters_list() -> Vec<Box<dyn Formatter>> {
             vec![
@@ -588,47 +636,116 @@ pub mod generic {
 
         #[test]
         fn auto_indenting_rule_always_indent() {
-            todo!();
+            let mut fmtr = Box::new(AutoIndent::new());
+            fmtr.reset_to_defaults();
+            fmtr.set_filter_indent_always(&["html"]).unwrap();
+
+            // Test: Auto-indenting works on non-registered tags with manual LF.
+            // <body>\n<img></body>
+            assert_eq!(fmtr.check(&SequenceState::open_lf("body")), INDENT_MORE);
+            assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "body")),
+                INDENT_LESS
+            );
+
+            // Test: Auto-indenting works on registered tags with manual LF.
+            // <html>\n<img></html>
+            assert_eq!(fmtr.check(&SequenceState::open_lf("html")), INDENT_MORE);
+            assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "html")),
+                INDENT_LESS
+            );
+
+            // Test: Auto-indenting works on registered tags without input.
+            // <html><img></html>
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("html", "img")),
+                INDENT_MORE
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "html")),
+                INDENT_LESS
+            );
+
+            // Test: Multiple stages with manual and auto-indenting mixed tags.
+            assert_eq!(
+                fmtr.check(&SequenceState::open_open("html", "body")),
+                INDENT_MORE
+            );
+            assert_eq!(fmtr.check(&SequenceState::open_lf("body")), INDENT_MORE);
+            assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "body")),
+                INDENT_LESS
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_close("body", "html")),
+                INDENT_LESS
+            );
+
+            // ? Error on self-closing tags if added to always-indent ?
         }
 
         #[test]
         fn auto_indenting_rule_lf_always() {
             let mut fmtr = Box::new(AutoIndent::new());
             fmtr.reset_to_defaults();
-            fmtr.set_filter_lf_always(&["html"]);
+            fmtr.set_filter_lf_always(&["html"]).unwrap();
 
             // Test: Auto-LF after opening-tag and after closing-tag of registered tags.
             // <html><img></html>
-            assert_eq!(fmtr.check(&SequenceState::open_self_closing("html", "img")), LINEFEED);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("img", "html")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("html", "img")),
+                LINEFEED
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "html")),
+                NOTHING
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
             // Test: No auto-LF after opening- and closing-tags of non-registered tags.
             // <body><img></body>
-            assert_eq!(fmtr.check(&SequenceState::open_self_closing("body", "img")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("img", "body")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("body", "img")),
+                NOTHING
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "body")),
+                NOTHING
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
 
             // Test: Auto-indenting after registered tags and opening-tag folowed by LF.
             // <html>\n<img></html>
             assert_eq!(fmtr.check(&SequenceState::open_lf("html")), LINEFEED);
             assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("img", "html")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "html")),
+                NOTHING
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
             // Test: Auto-indenting after non-registered tags and following LF.
             // <body>\n<img></body>
             assert_eq!(fmtr.check(&SequenceState::open_lf("body")), INDENT_MORE);
             assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("img", "body")), INDENT_LESS);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "body")),
+                INDENT_LESS
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
+
+            // ? Error on self-closing tags if added to lf-always ?
         }
 
         #[test]
         fn auto_indenting_rule_lf_closing() {
             let mut fmtr = Box::new(AutoIndent::new());
             fmtr.reset_to_defaults();
-            fmtr.set_filter_lf_closing(&["html", "img"]);
+            fmtr.set_filter_lf_closing(&["html", "img"]).unwrap();
 
             // Test: open-close works without problems, no formatting at all in between.
             // <html></html>
@@ -648,29 +765,109 @@ pub mod generic {
             assert_eq!(fmtr.check(&SequenceState::open_text("body")), NOTHING);
             assert_eq!(fmtr.check(&SequenceState::text_close("body")), NOTHING);
             assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
-            
+
             // Test: Auto-indenting on open-lf for non-listed tags.
             // <body>\n<link></body>
             assert_eq!(fmtr.check(&SequenceState::open_lf("body")), INDENT_MORE);
             assert_eq!(fmtr.check(&SequenceState::lf_self_closing("link")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("link", "body")), INDENT_LESS);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("link", "body")),
+                INDENT_LESS
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
 
             // Test: Auto-indenting on open-lf for listed tags.
             // <html>\n<link></html>
             assert_eq!(fmtr.check(&SequenceState::open_lf("html")), INDENT_MORE);
             assert_eq!(fmtr.check(&SequenceState::lf_self_closing("link")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("link", "html")), INDENT_LESS);
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("link", "html")),
+                INDENT_LESS
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
             // Test: Auto-LF after listed self-closing tags.
             // <div><img></div>
-            assert_eq!(fmtr.check(&SequenceState::open_self_closing("div", "img")), NOTHING);
-            assert_eq!(fmtr.check(&SequenceState::self_closing_close("img", "div")), LINEFEED);
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("div", "img")),
+                NOTHING
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "div")),
+                LINEFEED
+            );
             assert_eq!(fmtr.check(&SequenceState::close_text("div")), NOTHING);
-            
+
             // Test: No auto-LF after non-listed self-clsoing tags.
             // already tested that before two times.
+        }
+
+        #[test]
+        fn auto_indenting_mixed_rules() {
+            let mut fmtr = Box::new(AutoIndent::new());
+
+            // Test some error messages
+            fmtr.reset_to_defaults();
+            fmtr.set_filter_indent_always(&["html", "body"]).unwrap();
+            assert_err!(fmtr.set_filter_lf_always(&["html", "head"]));
+            fmtr.set_filter_lf_closing(&["html", "body"]).unwrap();
+
+            fmtr.reset_to_defaults();
+            fmtr.set_filter_lf_always(&["html", "body"]).unwrap();
+            assert_err!(fmtr.set_filter_indent_always(&["html", "head"]));
+            assert_err!(fmtr.set_filter_lf_closing(&["body", "header"]));
+
+            // Now, test setup for the operational test cases.
+            fmtr.reset_to_defaults();
+            fmtr.set_filter_indent_always(&["head", "body"]).unwrap();
+            fmtr.set_filter_lf_always(&["html"]).unwrap();
+            fmtr.set_filter_lf_closing(&["body", "div"]).unwrap();
+
+            // Test: Auto-indenting combined with lf-always.
+            // <html><head><link></head></html>
+            assert_eq!(
+                fmtr.check(&SequenceState::open_open("html", "head")),
+                LINEFEED
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("head", "link")),
+                INDENT_MORE
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("link", "head")),
+                INDENT_LESS
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::close_close("head", "html")),
+                NOTHING
+            );
+            assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
+
+            // Test: Auto-indenting works also if lf-closing activated too.
+            // <body><div>Text</div></body>
+            assert_eq!(
+                fmtr.check(&SequenceState::open_open("body", "div")),
+                INDENT_MORE
+            );
+            assert_eq!(fmtr.check(&SequenceState::open_text("div")), NOTHING);
+            assert_eq!(fmtr.check(&SequenceState::text_close("div")), NOTHING);
+            assert_eq!(
+                fmtr.check(&SequenceState::close_close("div", "body")),
+                INDENT_LESS
+            );
+            assert_eq!(fmtr.check(&SequenceState::close_text("body")), LINEFEED);
+
+            // Test: Auto-indenting works also if lf-closing on self-closing tags activated.
+            // <body><img></body>
+            assert_eq!(
+                fmtr.check(&SequenceState::open_self_closing("body", "img")),
+                INDENT_MORE
+            );
+            assert_eq!(
+                fmtr.check(&SequenceState::self_closing_close("img", "body")),
+                INDENT_LESS
+            );
+            assert_eq!(fmtr.check(&SequenceState::close_text("body")), LINEFEED);
         }
     }
 }

@@ -4,4 +4,5 @@ version = "0.2.0"
 edition = "2021"
 authors = ["Michael Eberhardt <github@michael-eberhardt.de>"]
 
-[dependencies]
+[dev-dependencies]
+totems = "0.2"
