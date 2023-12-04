@@ -1,4 +1,4 @@
-//! # notesth
+//! # markupsth
 //!
 //! A very simple Rust library for writing almost all kinds of formatted text files, escpially
 //! Markup files, such as HTML and XML. Its original purpose was to develop a Text-to-HTML
@@ -11,6 +11,8 @@
 //! an own formatting style (implement your own `Formatter` to be used with this crate), have a
 //! look at the `format` module.
 //!
+//! ### Request for changes
+//!
 //! In case of interest, I am also willing to extend this crate any time by new Markup Languages,
 //! formatting styles, or any other kind of meaningful modifications. Feel free to contact me via
 //! Email provided in the manifest file.
@@ -21,7 +23,7 @@
 //! can quickly write some converter or HTML-generator. Such a quick-start guide can be seen in the
 //! following example.
 //!
-//! ### Simple Readable HTML
+//! ### Readable HTML
 //!
 //! To generate the following HTML code:
 //! ```html
@@ -80,7 +82,7 @@
 //! # assert_eq!(document, markupsth::testfile("formatted_html_auto_indent.html"));
 //! ```
 //!
-//! ### Simple XML Example
+//! ### Readable XML
 //!
 //! To generate the following output:
 //! ```xml
