@@ -4,7 +4,7 @@
 //!
 //! ### General Concept
 //!
-//! In this crate will be assumed, that any kind of formatter works on the fly, while editing, not 
+//! In this crate will be assumed, that any kind of formatter works on the fly, while editing, not
 //! afterwards. Therefore an optional change of current formatting has to be applied between two
 //! sequences (the past one and before the next one). Such optional changes of format can either be
 //! a linefeed and/or a change of current indenting, but it cannot be change of indenting without a
@@ -19,13 +19,13 @@
 //! For this current concept, it is sufficient to assume three possible rules to describe all
 //! relevant formatting in this crate. These are:
 //!
-//! - *Indent-Always*: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
-//!   this rule, will indent everything between them. Tags who are assigned to this rule, cannot be 
+//! - **Indent-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
+//!   this rule, will indent everything between them. Tags who are assigned to this rule, cannot be
 //!   assigned to rule LF-Always too, but they can be assigned to rule LF-Closing.
-//! - *LF-Always*: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
+//! - **LF-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
 //!   this rule, will have a linefeed inserted after each tag, opening and closing tag. Tags
 //!   assigned to this rule, cannot be assigned to nor Indent-Always, nor LF-Closing.
-//! - *LF-Closing*: Can be applied to all kind of tags. For closing tags assigned to this rule, a
+//! - **LF-Closing**: Can be applied to all kind of tags. For closing tags assigned to this rule, a
 //!   linefeed will be inserted after it. Tags who are assigned to this rule, can also be assigne
 //!   to rule Indent-Always, but not to LF-Always.
 //!
@@ -328,7 +328,7 @@ pub trait Formatter: std::fmt::Debug {
 /// For more informations about the rules, read subsection `Fixed Ruleset` in this module's initial
 /// documentation.
 #[derive(Copy, Clone, Debug)]
-enum FixedRule {
+pub enum FixedRule {
     /// Selector for rule Indent-Always.
     IndentAlways,
     /// Selector for rule LF-Always.

@@ -73,13 +73,13 @@ macro_rules! final_op_arm {
     (opening $self:expr) => {{
         $self.document.write_fmt(format_args!(
             "{}",
-            $self.syntax.tag_pairs.as_ref().unwrap().opener_after
+            $self.syntax.tag_pairs.as_ref().unwrap().opening_after
         ))?;
     }};
     (closing $self:expr) => {{
         $self.document.write_fmt(format_args!(
             "{}",
-            $self.syntax.tag_pairs.as_ref().unwrap().closer_after
+            $self.syntax.tag_pairs.as_ref().unwrap().closing_after
         ))?;
     }};
 }
@@ -89,18 +89,9 @@ pub(crate) use final_op_arm;
 impl<'d> MarkupSth<'d> {
     /// New type pattern for creating a new MarkupSth.
     pub fn new(document: &'d mut String, ml: Language) -> Result<MarkupSth<'d>> {
-        let formatter: Box<dyn Formatter> = match ml {
-            Language::Html => {
-                let mut fmt = crate::formatters::AutoIndent::new();
-                fmt.set_filter_default_html();
-                Box::new(fmt)
-            }
-            Language::Xml => Box::new(crate::formatters::AutoIndent::new()),
-            Language::Other(_) => Box::new(crate::formatters::AutoIndent::new()),
-        };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
-            formatter,
+            formatter: Box::new(crate::formatters::AutoIndent::new()),
             seq_state: SequenceState::new(),
             indent_str: String::new(),
             document,
@@ -128,7 +119,7 @@ impl<'d> MarkupSth<'d> {
         self.finalize_last_op(TagSequence::opening(tag))?;
         if let Some(cfg) = &self.syntax.tag_pairs {
             self.document
-                .write_fmt(format_args!("{}{}", cfg.opener_before, tag))?;
+                .write_fmt(format_args!("{}{}", cfg.opening_before, tag))?;
             self.seq_state.tag_stack.push(tag.to_string());
             Ok(())
         } else {
@@ -148,7 +139,7 @@ impl<'d> MarkupSth<'d> {
         self.finalize_last_op(TagSequence::closing(&tag))?;
         let cfg = self.syntax.tag_pairs.as_ref().unwrap();
         self.document
-            .write_fmt(format_args!("{}{}", cfg.closer_before, &tag))?;
+            .write_fmt(format_args!("{}{}", cfg.closing_before, &tag))?;
         Ok(())
     }
 
