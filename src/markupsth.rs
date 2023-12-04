@@ -1,5 +1,5 @@
-//! This module is home of `MarkupSth`, the core and 'writer' of this crate. Have a look at
-//! `MarkupSth`'s documentation.
+//! This module is home of `MarkupSth`, the core and 'writer' of this crate. `MarkupSth` owns the
+//! syntax configuration and a `Formatter`, which can be configured individually.
 
 use crate::{
     format::{FormatChanges, Formatter, Sequence, SequenceState, TagSequence},
@@ -91,12 +91,12 @@ impl<'d> MarkupSth<'d> {
     pub fn new(document: &'d mut String, ml: Language) -> Result<MarkupSth<'d>> {
         let formatter: Box<dyn Formatter> = match ml {
             Language::Html => {
-                let mut fmt = crate::format::generic::AutoIndent::new();
+                let mut fmt = crate::formatters::AutoIndent::new();
                 fmt.set_filter_default_html();
                 Box::new(fmt)
             }
-            Language::Xml => Box::new(crate::format::generic::AutoIndent::new()),
-            Language::Other(_) => Box::new(crate::format::generic::AutoIndent::new()),
+            Language::Xml => Box::new(crate::formatters::AutoIndent::new()),
+            Language::Other(_) => Box::new(crate::formatters::AutoIndent::new()),
         };
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
@@ -290,6 +290,7 @@ impl<'d> MarkupSth<'d> {
     }
 }
 
+/// Simplifies using `MarkupSth::properties()` and calls this method internally.
 #[macro_export]
 macro_rules! properties {
     ($markup:expr, $($name:literal, $value:literal),*) => {{

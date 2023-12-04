@@ -124,14 +124,19 @@
 //! ```
 
 pub mod format;
+pub mod formatters;
 pub mod markupsth;
 pub mod syntax;
 
 pub use crate::{
-    format::{generic::*, FixedRuleset, Formatter},
+    format::{FixedRuleset, Formatter},
+    formatters::*,
     markupsth::MarkupSth,
     syntax::Language,
 };
+
+/// Crate common definition for an optional `Result` type.
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Crate internal support method for some unittests with external reference files.
 pub fn testfile(name: &str) -> String {
