@@ -90,17 +90,6 @@ pub struct AutoIndent {
     indent_step: usize,
 }
 
-// Styles of desire:
-// 1. Always LINEFEEDs but no indenting, e.g. <html>
-// 2. Always content indented, e.g. <body>, <head>
-// 3. Linefeed after the closing tag, e.g. </div>
-#[derive(Copy, Clone, Debug)]
-enum AIFilter {
-    IndentAlways,
-    LfAlways,
-    LfClosing,
-}
-
 impl AutoIndent {
     /// A default filter setup for HTML auto indenting will be applied.
     pub fn set_filter_default_html(&mut self) {
