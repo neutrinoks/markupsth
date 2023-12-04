@@ -6,6 +6,25 @@
 //! This module contains all implementations and definitions to setup the formatting in
 //! `MarkupSth`. Available options are currently indenting-step-size, auto-line-feed, and
 //! auto-indenting.
+//!
+//! ## General Formatting Rules
+//!
+//! Explain concept about three general rules. TODO
+//!
+//! ### Indent-Always
+//!
+//! TODO
+//!
+//! ### LF-Always
+//!
+//! TODO
+//!
+//! ### LF-Closing
+//!
+//! TODO
+
+/// Crate common definition for a possible `Result` type.
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Crate default and initial indenting step size. Can be overwritten by trait methods.
 pub const DEFAULT_INDENT: usize = 4;
@@ -257,18 +276,45 @@ pub trait Formatter: std::fmt::Debug {
         Self: Sized;
 
     /// Modify and set the indenting step size. Default is `DEFAULT_INDENT`.
-    fn set_indent_step_size(&mut self, step_size: usize);
+    fn set_indent_step_size(&mut self, _step_size: usize) {}
 
     /// Returns the current indenting step size.
-    fn get_indent_step_size(&self) -> usize;
+    fn get_indent_step_size(&self) -> usize {
+        DEFAULT_INDENT
+    }
+
+    /// TODO
+    fn optional_fixed_ruleset(&mut self) -> Option<&mut dyn FixedRuleset> {
+        None
+    }
 
     /// Whatever may configurable, this function shall rest to its defaults.
-    fn reset_to_defaults(&mut self);
+    fn reset_to_defaults(&mut self) {}
 
     /// Checks for format changes between the last and the next `TagSequence`. Neccessary changes
     /// regarding indenting and/or line-feed will be returned as `FormatChanges`. See description
     /// for more informations.
     fn check(&mut self, state: &SequenceState) -> FormatChanges;
+}
+
+/// TODO
+pub trait FixedRuleset: Formatter {
+    /// TODO
+    /// Tag names after which shall always be indented more, can be setup in this filter. For
+    /// example, if always shall be indented more after the following tag names: "head",
+    /// "body", "section":
+    /// ```ignore
+    /// let mut formatter = AutoIndent::new();
+    /// formatter.set_filter_indent_always(&["head", "body", "section"]);
+    /// ```
+    /// Default is empty.
+    fn set_filter_indent_always(&mut self, _fltr: &[&str]) -> Result<()>;
+
+    /// TODO
+    fn set_filter_lf_always(&mut self, _fltr: &[&str]) -> Result<()>;
+
+    /// TODO
+    fn set_filter_lf_closing(&mut self, _fltr: &[&str]) -> Result<()>;
 }
 
 pub mod generic {
@@ -282,14 +328,6 @@ pub mod generic {
         fn new() -> NoFormatting {
             NoFormatting
         }
-
-        fn set_indent_step_size(&mut self, _: usize) {}
-
-        fn get_indent_step_size(&self) -> usize {
-            DEFAULT_INDENT
-        }
-
-        fn reset_to_defaults(&mut self) {}
 
         fn check(&mut self, _: &SequenceState) -> FormatChanges {
             FormatChanges::nothing()
@@ -384,42 +422,8 @@ pub mod generic {
             self.fltr_lf_closing.clear();
         }
 
-        /// Tag names after which shall always be indented more, can be setup in this filter. For
-        /// example, if always shall be indented more after the following tag names: "head",
-        /// "body", "section":
-        /// ```ignore
-        /// let mut formatter = AutoIndent::new();
-        /// formatter.set_filter_indent_always(&["head", "body", "section"]);
-        /// ```
-        /// Default is empty.
-        pub fn set_filter_indent_always(&mut self, filter: &[&str]) -> Result<(), String> {
-            self.check_other_filter(filter, AIFilter::IndentAlways, AIFilter::LfAlways)?;
-            self.fltr_indent_always = filter.iter().map(|s| s.to_string()).collect();
-            Ok(())
-        }
-
-        /// TODO
-        pub fn set_filter_lf_always(&mut self, filter: &[&str]) -> Result<(), String> {
-            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::IndentAlways)?;
-            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::LfClosing)?;
-            self.fltr_lf_always = filter.iter().map(|s| s.to_string()).collect();
-            Ok(())
-        }
-
-        /// TODO
-        pub fn set_filter_lf_closing(&mut self, filter: &[&str]) -> Result<(), String> {
-            self.check_other_filter(filter, AIFilter::LfClosing, AIFilter::LfAlways)?;
-            self.fltr_lf_closing = filter.iter().map(|s| s.to_string()).collect();
-            Ok(())
-        }
-
         // Internal method to check if tags are in another filter too.
-        fn check_other_filter(
-            &self,
-            tags: &[&str],
-            fltr: AIFilter,
-            other: AIFilter,
-        ) -> Result<(), String> {
+        fn check_other_filter(&self, tags: &[&str], fltr: AIFilter, other: AIFilter) -> Result<()> {
             let errtags: Vec<String> = tags
                 .iter()
                 .filter(|t| self.is_ts_in_filter(&TagSequence::opening(t), other))
@@ -435,7 +439,8 @@ pub mod generic {
                     "trying to add tags which have already been added to filter",
                     other,
                     errtags
-                ))
+                )
+                .into())
             }
         }
 
@@ -486,6 +491,10 @@ pub mod generic {
             self.fltr_lf_always.clear();
             self.fltr_lf_closing.clear();
             self.indent_step = DEFAULT_INDENT;
+        }
+
+        fn optional_fixed_ruleset(&mut self) -> Option<&mut dyn FixedRuleset> {
+            Some(self)
         }
 
         fn check(&mut self, state: &SequenceState) -> FormatChanges {
@@ -557,6 +566,27 @@ pub mod generic {
                 }
             }
             changes
+        }
+    }
+
+    impl FixedRuleset for AutoIndent {
+        fn set_filter_indent_always(&mut self, filter: &[&str]) -> Result<()> {
+            self.check_other_filter(filter, AIFilter::IndentAlways, AIFilter::LfAlways)?;
+            self.fltr_indent_always = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
+        }
+
+        fn set_filter_lf_always(&mut self, filter: &[&str]) -> Result<()> {
+            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::IndentAlways)?;
+            self.check_other_filter(filter, AIFilter::LfAlways, AIFilter::LfClosing)?;
+            self.fltr_lf_always = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
+        }
+
+        fn set_filter_lf_closing(&mut self, filter: &[&str]) -> Result<()> {
+            self.check_other_filter(filter, AIFilter::LfClosing, AIFilter::LfAlways)?;
+            self.fltr_lf_closing = filter.iter().map(|s| s.to_string()).collect();
+            Ok(())
         }
     }
 

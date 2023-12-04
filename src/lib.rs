@@ -15,7 +15,7 @@
 //! formatting styles, or any other kind of meaningful modifications. Feel free to contact me via
 //! Email provided in the manifest file.
 //!
-//! ## Examples from Scratch
+//! ## Examples
 //!
 //! By using an implemented Markup Language such as HTML or XML, and a pre-defined `Formatter`, you
 //! can quickly write some converter or HTML-generator. Such a quick-start guide can be seen in the
@@ -91,23 +91,51 @@
 //! ```
 //! use markupsth::{AutoIndent, Language, MarkupSth, properties};
 //!
+//! let do_entry = |mus: &mut MarkupSth, name: &str| {
+//!     mus.open("entry").unwrap();
+//!     mus.open("keyword").unwrap();
+//!     mus.text(name).unwrap();
+//!     mus.close().unwrap();
+//!     mus.open("entrystext").unwrap();
+//!     mus.text(&format!("{} is the residence of ...", name))
+//!         .unwrap();
+//!     mus.close().unwrap();
+//!     mus.close().unwrap();
+//! };
+//!
 //! // Setup a document (String), MarkupSth and a default formatter.
 //! let mut document = String::new();
 //! let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 //!
+//! // Default Formatter is an AutoIndent, so get it, configure it!
+//! let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
+//! fmtr.set_filter_indent_always(&["directory", "entry"]).unwrap();
+//! fmtr.set_filter_lf_closing(&["title", "keyword", "entrystext"]).unwrap();
+//!
 //! // Generate the content of example shown above.
-//! todo!();
+//! mus.open("directory").unwrap();
+//! mus.open("title").unwrap();
+//! mus.text("Wikipedia List of Cities").unwrap();
+//! mus.close().unwrap();
+//! do_entry(&mut mus, "Hamburg");
+//! do_entry(&mut mus, "Munich");
+//! mus.close_all().unwrap();
+//! mus.finalize().unwrap();
 //! ```
 
 pub mod format;
 pub mod markupsth;
 pub mod syntax;
 
-pub use crate::{format::generic::*, format::Formatter, markupsth::MarkupSth, syntax::Language};
+pub use crate::{
+    format::{generic::*, FixedRuleset, Formatter},
+    markupsth::MarkupSth,
+    syntax::Language,
+};
 
 /// Crate internal support method for some unittests with external reference files.
 pub fn testfile(name: &str) -> String {
-    let mut s = std::fs::read_to_string(&format!("tests/{}", name)).unwrap();
+    let mut s = std::fs::read_to_string(format!("tests/{}", name)).unwrap();
     s.pop();
     s
 }
@@ -194,6 +222,7 @@ mod tests {
         mus.open_close_w("p", "This is HTML").unwrap();
         mus.close_all().unwrap();
         mus.finalize().unwrap();
+
         assert_eq!(document, testfile("formatted_html_auto_indent.html"),);
     }
 
@@ -213,12 +242,11 @@ mod tests {
 
         let mut document = String::new();
         let mut mus = MarkupSth::new(&mut document, Language::Xml).unwrap();
-        todo!();
-        mus.formatter
-            .set_filter_indent_always(&["directory", "entry"])
+        // Default Formatter is an AutoIndent, so get it, configure it!
+        let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
+        fmtr.set_filter_indent_always(&["directory", "entry"])
             .unwrap();
-        mus.formatter
-            .set_filter_lf_closing(&["title", "keyword", "entrystext"])
+        fmtr.set_filter_lf_closing(&["title", "keyword", "entrystext"])
             .unwrap();
 
         mus.open("directory").unwrap();

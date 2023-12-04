@@ -290,13 +290,6 @@ impl<'d> MarkupSth<'d> {
     }
 }
 
-// #[macro_export]
-// macro_rules! properties {
-//     ($($name:literal, $value:literal),*) => {
-//         vec![$(($name.to_string(), $value.to_string())),*]
-//     };
-// }
-
 #[macro_export]
 macro_rules! properties {
     ($markup:expr, $($name:literal, $value:literal),*) => {{
