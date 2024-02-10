@@ -1,6 +1,6 @@
 [package]
 name = "markupsth"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Michael Eberhardt <github@michael-eberhardt.de>"]
 edition = "2021"
 description = "Crate to define and print out formatted Markup Languages."

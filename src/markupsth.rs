@@ -284,7 +284,7 @@ impl<'d> MarkupSth<'d> {
 /// Simplifies using `MarkupSth::properties()` and calls this method internally.
 #[macro_export]
 macro_rules! properties {
-    ($markup:expr, $($name:literal, $value:literal),*) => {{
+    ($markup:expr, $($name:literal, $value:expr),*) => {{
         $markup.properties(&[$(($name, $value)),*])
     }};
 }
