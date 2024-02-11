@@ -87,7 +87,7 @@ macro_rules! final_op_arm {
 pub(crate) use final_op_arm;
 
 impl<'d> MarkupSth<'d> {
-    /// New type pattern for creating a new MarkupSth.
+    /// New type pattern for creating a new MarkupSth instance.
     pub fn new(document: &'d mut String, ml: Language) -> Result<MarkupSth<'d>> {
         Ok(MarkupSth {
             syntax: SyntaxConfig::from(ml),
@@ -203,7 +203,15 @@ impl<'d> MarkupSth<'d> {
 
     pub fn new_line(&mut self) -> Result<()> {
         self.finalize_last_op(TagSequence::linefeed())?;
-        // self.seq_state.last.0 = Sequence::LineFeed;
+        self.new_line_internal()?;
+        Ok(())
+    }
+
+    pub fn new_lines(&mut self, n: usize) -> Result<()> {
+        self.new_line()?;
+        for _ in 1..n {
+            self.new_line_internal()?;
+        }
         Ok(())
     }
 

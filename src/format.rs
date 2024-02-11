@@ -14,29 +14,33 @@
 //! Optional more complex formatters will describe their features by additional traits. Currently
 //! there is only one additional feature trait `FixedRuleset`.
 //!
-//! ### Fixed Ruleset
-//!
-//! For this current concept, it is sufficient to assume three possible rules to describe all
-//! relevant formatting in this crate. These are:
-//!
-//! - **Indent-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
-//!   this rule, will indent everything between them. Tags who are assigned to this rule, cannot be
-//!   assigned to rule LF-Always too, but they can be assigned to rule LF-Closing.
-//! - **LF-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
-//!   this rule, will have a linefeed inserted after each tag, opening and closing tag. Tags
-//!   assigned to this rule, cannot be assigned to nor Indent-Always, nor LF-Closing.
-//! - **LF-Closing**: Can be applied to all kind of tags. For closing tags assigned to this rule, a
-//!   linefeed will be inserted after it. Tags who are assigned to this rule, can also be assigne
-//!   to rule Indent-Always, but not to LF-Always.
-//!
-//! Formatters who implement this ruleset will also implement the trait `FixedRuleset`. There is
-//! one pre-defined formatter available in module `formatters`, named `AutoIndent`.
-//!
 //! ### Pre-defined Formatters
 //!
 //! You do not have to implement your own formatter anyway - there are three types of pre-defined
 //! ones available in module `formatters`, have a look at them! By default `MarkupSth` is using the
 //! pre-defined formatter `AutoIndent`.
+//!
+//! ### Auto-Indenting Rules
+//!
+//! At the moment, the pre-implemented formatter `AutoIndent` will be sufficient for the most cases.
+//! The formatter `AutoIndent` can be configured by three simple rules:
+//!
+//! - **Indent-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned
+//!   to this rule, will indent everything between them. Tags who are assigned to this rule, cannot
+//!   be assigned to rule LF-Always too, but they can be assigned to rule LF-Closing.
+//! - **LF-Always**: Can only be applied to tag pairs, not to self-closing tags. Tags assigned to
+//!   this rule, will have a linefeed inserted after each tag, and eventually before also, opening
+//!   and closing tag. Tags assigned to this rule, cannot be assigned to nor Indent-Always, nor
+//!   LF-Closing. The philosophy here is to force such tags to have always a single line.
+//! - **LF-Closing**: Can be applied to all kind of tags. For closing tags assigned to this rule, a
+//!   linefeed will be inserted after it. Tags who are assigned to this rule, can also be assigne to
+//!   rule Indent-Always, but not to LF-Always.
+//!
+//! So, tags can be assigned to rule **LF-Always** or to rule **Indent-Always**, but not both.
+//! Optionally, **Indent-Always** can be combined with **LF-Closing**.
+//!
+//! Formatters who implement this ruleset will also implement the trait `FixedRuleset`. There is
+//! one pre-defined formatter available in module `formatters`, named `AutoIndent`.
 
 use crate::Result;
 
@@ -262,12 +266,19 @@ impl FormatChanges {
         }
     }
 
-    /// An indented block is following. New line and increase current indenting.
+    /// Indenting gets increased without additional new line (line feed).
     pub fn indent_more(indent: usize, step: usize) -> FormatChanges {
         FormatChanges {
-            new_line: true,
+            new_line: false,
             new_indent: Some(indent + step),
         }
+    }
+
+    /// An indented block is following. New line and increase current indenting.
+    pub fn lf_indent_more(indent: usize, step: usize) -> FormatChanges {
+        let mut fc = FormatChanges::indent_more(indent, step);
+        fc.new_line = true;
+        fc
     }
 
     /// An indented block is ending. New line and decrease current indenting.
@@ -278,9 +289,16 @@ impl FormatChanges {
             Some(indent - step)
         };
         FormatChanges {
-            new_line: true,
+            new_line: false,
             new_indent,
         }
+    }
+
+    /// An indented block is following. New line and increase current indenting.
+    pub fn lf_indent_less(indent: usize, step: usize) -> FormatChanges {
+        let mut fc = FormatChanges::indent_less(indent, step);
+        fc.new_line = true;
+        fc
     }
 }
 
@@ -307,12 +325,6 @@ pub trait Formatter: std::fmt::Debug {
         DEFAULT_INDENT
     }
 
-    /// Returns a mutable reference to itself, if the features described by the `FixedRuleset` are
-    /// supported by the formatter.
-    fn optional_fixed_ruleset(&mut self) -> Option<&mut dyn FixedRuleset> {
-        None
-    }
-
     /// Whatever may configurable and may have been re-configured, this function shall reset all
     /// configurable properties back to their defaults.
     fn reset_to_defaults(&mut self) {}
@@ -321,14 +333,19 @@ pub trait Formatter: std::fmt::Debug {
     /// changes between the last inserted tag and the next one, before it will get inserted into
     /// the document under edit.
     fn check(&mut self, state: &SequenceState) -> FormatChanges;
+
+    /// Returns this special kind of Formatter.
+    fn get_ext_auto_indenting(&mut self) -> Option<&mut dyn ExtAutoIndenting> {
+        None
+    }
 }
 
-/// Selector for available rules described by the Fixed Ruleset in this module.
+/// Selector for available auto-formatting rules for the `AutoFormatter`.
 ///
-/// For more informations about the rules, read subsection `Fixed Ruleset` in this module's initial
-/// documentation.
+/// The `AutoFormatter` is one of the default formatter implementations, which is a pre-defined
+/// extension of the basic `Formatter` trait.
 #[derive(Copy, Clone, Debug)]
-pub enum FixedRule {
+pub enum AutoFmtRule {
     /// Selector for rule Indent-Always.
     IndentAlways,
     /// Selector for rule LF-Always.
@@ -337,13 +354,12 @@ pub enum FixedRule {
     LfClosing,
 }
 
-/// The trait which maps the requirements of the Fixed Ruleset described in module `format`.
-///
-/// Basically only setter and metter methods will be provided to add tag names to a register for
-/// each rule defined in the Fixed Ruleset.
-pub trait FixedRuleset: Formatter {
+/// An extension trait for the `AutoFormatting` formatter implementation. This formatter
+/// accepts different rules for configuring individual needs on auto-formatting. The available
+/// rules are described be the `AutoFmtRule` definition.
+pub trait ExtAutoIndenting: Formatter {
     /// Adds all given tags to a register for rule selected by a `FixedRule`.
-    fn add_tags_to_rule(&mut self, tags: &[&str], rule: FixedRule) -> Result<()>;
+    fn add_tags_to_rule(&mut self, tags: &[&str], rule: AutoFmtRule) -> Result<()>;
 
     /// Shall reset and empty all registers for fixed rules.
     fn reset_ruleset(&mut self) -> Result<()>;
