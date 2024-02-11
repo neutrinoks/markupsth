@@ -2,7 +2,7 @@
 //! `AlwaysIndentAlwaysLf`, and the `AutoIndent`, which are ready to be used without any effort.
 //!
 //! All of the three pre-implemented formatters implement for sure the trait `Formatter`. Formatter
-//! `AutoIndent` implements the additional feature trait `FixedRuleset` as well. Have a look at
+//! `AutoIndent` implements the additional feature trait `AutoFmtRuleset` as well. Have a look at
 //! their further documentation to get an overview.
 //!
 //! To overwrite the default formatter apply:
@@ -18,7 +18,7 @@
 //! ```
 //!
 //! To modify the default `AutoIndent` formatter use either the trait methods from trait
-//! `Formatter` or `FixedRuleset` defined in module `format`.
+//! `Formatter` or `AutoFmtRuleset` defined in module `format`.
 //!
 //! ### `NoFormatting`
 //!
@@ -50,21 +50,21 @@
 //!
 //! Depending on your personal taste, a good setup for HTML might be:
 //! ```
-//! # use markupsth::{FixedRule, FixedRuleset, Language, MarkupSth};
+//! # use markupsth::{AutoFmtRule, ExtAutoIndenting, Language, MarkupSth};
 //! # let mut doc = String::new();
 //! # let mut mus = MarkupSth::new(&mut doc, Language::Html).unwrap();
-//! # let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
+//! # let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
 //! fmtr.add_tags_to_rule(
 //!     &["head", "body", "header", "nav", "section", "footer"],
-//!     FixedRule::IndentAlways
+//!     AutoFmtRule::IndentAlways
 //!     ).unwrap();
 //! fmtr.add_tags_to_rule(
 //!     &["html"],
-//!     FixedRule::LfAlways
+//!     AutoFmtRule::LfAlways
 //!     ).unwrap();
 //! fmtr.add_tags_to_rule(
 //!     &["p", "div", "link"],
-//!     FixedRule::LfClosing
+//!     AutoFmtRule::LfClosing
 //!     ).unwrap();
 //! ```
 
@@ -114,20 +114,15 @@ impl Formatter for AlwaysIndentAlwaysLf {
     fn check(&mut self, state: &SequenceState) -> FormatChanges {
         if matches!(state.next.0, Sequence::Closing) {
             match state.last.0 {
-                Sequence::Opening => FormatChanges::may_lf(true),
-                _ => FormatChanges::indent_less(state.indent, self.0),
+                Sequence::Opening => FormatChanges::lf(),
+                _ => FormatChanges::lf_indent_less(state.indent, self.0),
             }
         } else {
             match state.last.0 {
-                Sequence::Initial => FormatChanges::may_lf(true),
-                Sequence::Opening => match state.next.0 {
-                    Sequence::SelfClosing | Sequence::Text | Sequence::Opening => {
-                        FormatChanges::indent_more(state.indent, self.0)
-                    }
-                    _ => FormatChanges::nothing(),
-                },
-                Sequence::Closing => FormatChanges::may_lf(true),
-                Sequence::SelfClosing => FormatChanges::may_lf(true),
+                Sequence::Initial => FormatChanges::lf(),
+                Sequence::Opening => FormatChanges::lf_indent_more(state.indent, self.0),
+                Sequence::Closing => FormatChanges::lf(),
+                Sequence::SelfClosing => FormatChanges::lf(),
                 _ => FormatChanges::nothing(),
             }
         }
@@ -148,21 +143,21 @@ impl Formatter for AlwaysIndentAlwaysLf {
 ///
 /// Depending on your personal taste, a good setup for HTML might be:
 /// ```
-/// # use markupsth::{FixedRule, Language, MarkupSth};
+/// # use markupsth::{AutoFmtRule, Language, MarkupSth};
 /// # let mut doc = String::new();
 /// # let mut mus = MarkupSth::new(&mut doc, Language::Html).unwrap();
-/// # let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
+/// # let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
 /// fmtr.add_tags_to_rule(
 ///     &["head", "body", "header", "nav", "section", "footer"],
-///     FixedRule::IndentAlways
+///     AutoFmtRule::IndentAlways
 ///     ).unwrap();
 /// fmtr.add_tags_to_rule(
 ///     &["html"],
-///     FixedRule::LfAlways
+///     AutoFmtRule::LfAlways
 ///     ).unwrap();
 /// fmtr.add_tags_to_rule(
 ///     &["p", "div", "link"],
-///     FixedRule::LfClosing
+///     AutoFmtRule::LfClosing
 ///     ).unwrap();
 /// ```
 #[derive(Debug)]
@@ -174,14 +169,19 @@ pub struct AutoIndent {
     /// List for tags, where a LINEFEED shall inserted after closing tags.
     pub fltr_lf_closing: Vec<String>,
     /// Internal, operational, for tracking whether indented or not.
-    indent_stack: Vec<bool>,
+    indent_stack: Vec<BlockClosingOp>,
     /// The indenting step size.
     indent_step: usize,
 }
 
 impl AutoIndent {
     // Internal method to check if tags are in another filter too.
-    fn check_other_filter(&self, tags: &[&str], fltr: FixedRule, other: FixedRule) -> Result<()> {
+    fn check_other_filter(
+        &self,
+        tags: &[&str],
+        fltr: AutoFmtRule,
+        other: AutoFmtRule,
+    ) -> Result<()> {
         let errtags: Vec<String> = tags
             .iter()
             .filter(|t| self.is_ts_in_filter(&TagSequence::opening(t), other))
@@ -203,11 +203,11 @@ impl AutoIndent {
     }
 
     /// Internal check method, if tag is contained in filter `fltr`.
-    fn is_ts_in_filter(&self, tagseq: &TagSequence, fltr: FixedRule) -> bool {
+    fn is_ts_in_filter(&self, tagseq: &TagSequence, fltr: AutoFmtRule) -> bool {
         let fltr: &Vec<String> = match fltr {
-            FixedRule::IndentAlways => &self.fltr_indent_always,
-            FixedRule::LfAlways => &self.fltr_lf_always,
-            FixedRule::LfClosing => &self.fltr_lf_closing,
+            AutoFmtRule::IndentAlways => &self.fltr_indent_always,
+            AutoFmtRule::LfAlways => &self.fltr_lf_always,
+            AutoFmtRule::LfClosing => &self.fltr_lf_closing,
         };
         for tf in fltr.iter() {
             if tf == &tagseq.1 {
@@ -218,7 +218,7 @@ impl AutoIndent {
     }
 
     /// Internal check method, if tag is contained in filter `fltr` and of type `seq`.
-    fn is_ts_in_fltr_aot(&self, tagseq: &TagSequence, fltr: FixedRule, seq: Sequence) -> bool {
+    fn is_ts_in_fltr_aot(&self, tagseq: &TagSequence, fltr: AutoFmtRule, seq: Sequence) -> bool {
         if tagseq.0 != seq {
             return false;
         }
@@ -252,54 +252,84 @@ impl Formatter for AutoIndent {
         self.indent_step = DEFAULT_INDENT;
     }
 
-    fn optional_fixed_ruleset(&mut self) -> Option<&mut dyn FixedRuleset> {
+    fn get_ext_auto_indenting(&mut self) -> Option<&mut dyn ExtAutoIndenting> {
         Some(self)
     }
 
     fn check(&mut self, state: &SequenceState) -> FormatChanges {
         let mut changes = FormatChanges::nothing();
 
+        let lf_always = self.is_ts_in_filter(&state.last, AutoFmtRule::LfAlways);
+        let ind_always = self.is_ts_in_filter(&state.last, AutoFmtRule::IndentAlways);
+
         if matches!(state.next.0, Sequence::Closing) {
-            // In case of a following closing tag, everything behaves a little different,
+            // if: In case of a following closing tag, everything behaves a little different,
             // because of optional less-indenting.
-            if matches!(state.last.0, Sequence::Opening)
-                && self.is_ts_in_filter(&state.last, FixedRule::LfAlways)
-            {
-                // Detect if lf or not...
-                changes = FormatChanges::lf();
-            } else if let Some(true) = self.indent_stack.pop() {
-                // otherwise we can check for a less-indenting on indent_stack!
-                changes = FormatChanges::indent_less(state.indent, self.indent_step);
-            } else if self.is_ts_in_fltr_aot(
-                &state.last,
-                FixedRule::IndentAlways,
-                Sequence::Closing,
-            ) || self.is_ts_in_filter(&state.last, FixedRule::LfAlways)
-                || self.is_ts_in_fltr_aot(&state.last, FixedRule::LfClosing, Sequence::Closing)
-                || self.is_ts_in_fltr_aot(&state.last, FixedRule::LfClosing, Sequence::SelfClosing)
-            {
-                changes = FormatChanges::lf();
+            if matches!(state.last.0, Sequence::Opening) {
+                // if: detect the rare case <open></close>
+                // In case of LF-Always or Indent-Always insert a line feed.
+                if lf_always || ind_always {
+                    changes = FormatChanges::lf();
+                }
+            } else {
+                // Pop a closing-instruction from the stack, there must be one for this closing!!
+                let closing_op = self.indent_stack.pop().unwrap();
+
+                if matches!(closing_op, BlockClosingOp::Linefeed) {
+                    // if: check if we do line feeds.
+                    changes = FormatChanges::lf();
+                } else if matches!(closing_op, BlockClosingOp::LfIndentLess) {
+                    // if: check if we do a block-finishing, (LF + less indenting).
+                    changes = FormatChanges::lf_indent_less(state.indent, self.indent_step);
+                } else if self.is_ts_in_fltr_aot(
+                    &state.last,
+                    AutoFmtRule::LfClosing,
+                    Sequence::SelfClosing,
+                ) {
+                    changes = FormatChanges::lf();
+                }
             }
+            // else if self.is_ts_in_fltr_aot(&state.last, AutoFmtRule::IndentAlways,
+            // Sequence::Closing)     || self.is_ts_in_filter(&state.last, AutoFmtRule::LfAlways)
+            //     || self.is_ts_in_fltr_aot(&state.last, AutoFmtRule::LfClosing, Sequence::Closing)
+            //     || self.is_ts_in_fltr_aot(&state.last, AutoFmtRule::LfClosing, Sequence::SelfClosing)
+            // {
+            //     // otherwise we can check for a less-indenting on indent_stack!
+            //     changes = FormatChanges::lf();
+            // }
         } else {
             match state.last.0 {
                 Sequence::Opening => {
-                    // After an opening-tag LINEFEED and optional indenting can be desired
-                    // Anyway, for each opening tag we add a flag for indenting on the internal stack.
-                    let do_indent = (matches!(state.next.0, Sequence::LineFeed)
-                        && !self.is_ts_in_filter(&state.last, FixedRule::LfAlways))
-                        || self.is_ts_in_filter(&state.last, FixedRule::IndentAlways);
-                    self.indent_stack.push(do_indent);
-                    if do_indent {
-                        changes = FormatChanges::indent_more(state.indent, self.indent_step);
-                    } else if self.is_ts_in_filter(&state.last, FixedRule::LfAlways) {
+                    // if: After an opening-tag LINEFEED and optional indenting can be desired.
+                    // Anyway, for each opening tag we add a flag for indenting on the internal
+                    // stack.
+                    if matches!(state.next.0, Sequence::LineFeed) {
+                        if lf_always {
+                            changes = FormatChanges::lf();
+                            self.indent_stack.push(BlockClosingOp::Linefeed);
+                        } else if ind_always {
+                            changes = FormatChanges::lf_indent_more(state.indent, self.indent_step);
+                            self.indent_stack.push(BlockClosingOp::LfIndentLess);
+                        } else {
+                            changes = FormatChanges::indent_more(state.indent, self.indent_step);
+                            self.indent_stack.push(BlockClosingOp::LfIndentLess);
+                        }
+                    } else if ind_always {
+                        self.indent_stack.push(BlockClosingOp::LfIndentLess);
+                        changes = FormatChanges::lf_indent_more(state.indent, self.indent_step);
+                    } else if lf_always {
+                        self.indent_stack.push(BlockClosingOp::Linefeed);
                         changes = FormatChanges::lf();
+                    } else {
+                        self.indent_stack.push(BlockClosingOp::Nothing);
+                        changes = FormatChanges::nothing();
                     }
                 }
                 Sequence::Closing => {
                     // After a closing-tag a LINEFEED can be desired
-                    if self.is_ts_in_filter(&state.last, FixedRule::IndentAlways)
-                        || self.is_ts_in_filter(&state.last, FixedRule::LfAlways)
-                        || self.is_ts_in_filter(&state.last, FixedRule::LfClosing)
+                    if self.is_ts_in_filter(&state.last, AutoFmtRule::IndentAlways)
+                        || self.is_ts_in_filter(&state.last, AutoFmtRule::LfAlways)
+                        || self.is_ts_in_filter(&state.last, AutoFmtRule::LfClosing)
                     {
                         changes = FormatChanges::lf();
                     }
@@ -307,7 +337,7 @@ impl Formatter for AutoIndent {
                 Sequence::SelfClosing => {
                     if self.is_ts_in_fltr_aot(
                         &state.last,
-                        FixedRule::LfClosing,
+                        AutoFmtRule::LfClosing,
                         Sequence::SelfClosing,
                     ) {
                         changes = FormatChanges::lf();
@@ -324,20 +354,20 @@ impl Formatter for AutoIndent {
     }
 }
 
-impl FixedRuleset for AutoIndent {
-    fn add_tags_to_rule(&mut self, tags: &[&str], rule: FixedRule) -> Result<()> {
+impl ExtAutoIndenting for AutoIndent {
+    fn add_tags_to_rule(&mut self, tags: &[&str], rule: AutoFmtRule) -> Result<()> {
         match rule {
-            FixedRule::IndentAlways => {
-                self.check_other_filter(tags, FixedRule::IndentAlways, FixedRule::LfAlways)?;
+            AutoFmtRule::IndentAlways => {
+                self.check_other_filter(tags, AutoFmtRule::IndentAlways, AutoFmtRule::LfAlways)?;
                 self.fltr_indent_always = tags.iter().map(|s| s.to_string()).collect();
             }
-            FixedRule::LfAlways => {
-                self.check_other_filter(tags, FixedRule::LfAlways, FixedRule::IndentAlways)?;
-                self.check_other_filter(tags, FixedRule::LfAlways, FixedRule::LfClosing)?;
+            AutoFmtRule::LfAlways => {
+                self.check_other_filter(tags, AutoFmtRule::LfAlways, AutoFmtRule::IndentAlways)?;
+                self.check_other_filter(tags, AutoFmtRule::LfAlways, AutoFmtRule::LfClosing)?;
                 self.fltr_lf_always = tags.iter().map(|s| s.to_string()).collect();
             }
-            FixedRule::LfClosing => {
-                self.check_other_filter(tags, FixedRule::LfClosing, FixedRule::LfAlways)?;
+            AutoFmtRule::LfClosing => {
+                self.check_other_filter(tags, AutoFmtRule::LfClosing, AutoFmtRule::LfAlways)?;
                 self.fltr_lf_closing = tags.iter().map(|s| s.to_string()).collect();
             }
         }
@@ -350,6 +380,17 @@ impl FixedRuleset for AutoIndent {
         self.fltr_lf_closing.clear();
         Ok(())
     }
+}
+
+/// Stackable instruction for a Formatter implementation when closing a block.
+#[derive(Copy, Clone, Debug)]
+enum BlockClosingOp {
+    /// As it says, the Formatter will apply nothing automatically.
+    Nothing,
+    /// Formatter will apply line feeds arround certain tags.
+    Linefeed,
+    /// Formatter will insert line feeds and decrease current indenting.
+    LfIndentLess,
 }
 
 #[cfg(test)]
@@ -365,11 +406,19 @@ mod tests {
         new_line: true,
         new_indent: None,
     };
-    const INDENT_LESS: FormatChanges = FormatChanges {
+    // const INDENT_LESS: FormatChanges = FormatChanges {
+    //     new_line: false,
+    //     new_indent: Some(0),
+    // };
+    const LF_INDENT_LESS: FormatChanges = FormatChanges {
         new_line: true,
         new_indent: Some(0),
     };
     const INDENT_MORE: FormatChanges = FormatChanges {
+        new_line: false,
+        new_indent: Some(8),
+    };
+    const LF_INDENT_MORE: FormatChanges = FormatChanges {
         new_line: true,
         new_indent: Some(8),
     };
@@ -411,7 +460,7 @@ mod tests {
     #[test]
     fn auto_indenting_rule_always_indent() {
         let mut fmtr = Box::new(AutoIndent::new());
-        fmtr.add_tags_to_rule(&["html"], FixedRule::IndentAlways)
+        fmtr.add_tags_to_rule(&["html"], AutoFmtRule::IndentAlways)
             .unwrap();
 
         // Test: Auto-indenting works on non-registered tags with manual LF.
@@ -420,43 +469,44 @@ mod tests {
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
 
         // Test: Auto-indenting works on registered tags with manual LF.
         // <html>\n<img></html>
-        assert_eq!(fmtr.check(&SequenceState::open_lf("html")), INDENT_MORE);
+        assert_eq!(fmtr.check(&SequenceState::open_lf("html")), LF_INDENT_MORE);
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "html")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
 
         // Test: Auto-indenting works on registered tags without input.
         // <html><img></html>
         assert_eq!(
             fmtr.check(&SequenceState::open_self_closing("html", "img")),
-            INDENT_MORE
+            LF_INDENT_MORE
         );
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "html")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
 
         // Test: Multiple stages with manual and auto-indenting mixed tags.
+        // <html><body>\n<img></body></html>
         assert_eq!(
             fmtr.check(&SequenceState::open_open("html", "body")),
-            INDENT_MORE
+            LF_INDENT_MORE
         );
         assert_eq!(fmtr.check(&SequenceState::open_lf("body")), INDENT_MORE);
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(
             fmtr.check(&SequenceState::close_close("body", "html")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
 
         // ? Error on self-closing tags if added to always-indent ?
@@ -465,7 +515,7 @@ mod tests {
     #[test]
     fn auto_indenting_rule_lf_always() {
         let mut fmtr = Box::new(AutoIndent::new());
-        fmtr.add_tags_to_rule(&["html"], FixedRule::LfAlways)
+        fmtr.add_tags_to_rule(&["html"], AutoFmtRule::LfAlways)
             .unwrap();
 
         // Test: Auto-LF after opening-tag and after closing-tag of registered tags.
@@ -476,7 +526,7 @@ mod tests {
         );
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "html")),
-            NOTHING
+            LINEFEED
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
@@ -498,7 +548,7 @@ mod tests {
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "html")),
-            NOTHING
+            LINEFEED
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
@@ -508,7 +558,7 @@ mod tests {
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("img")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
 
@@ -518,7 +568,7 @@ mod tests {
     #[test]
     fn auto_indenting_rule_lf_closing() {
         let mut fmtr = Box::new(AutoIndent::new());
-        fmtr.add_tags_to_rule(&["html", "img"], FixedRule::LfClosing)
+        fmtr.add_tags_to_rule(&["html", "img"], AutoFmtRule::LfClosing)
             .unwrap();
 
         // Test: open-close works without problems, no formatting at all in between.
@@ -546,7 +596,7 @@ mod tests {
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("link")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("link", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("body")), NOTHING);
 
@@ -556,7 +606,7 @@ mod tests {
         assert_eq!(fmtr.check(&SequenceState::lf_self_closing("link")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("link", "html")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("html")), LINEFEED);
 
@@ -581,25 +631,25 @@ mod tests {
         let mut fmtr = Box::new(AutoIndent::new());
 
         // Test some error messages
-        fmtr.add_tags_to_rule(&["html", "body"], FixedRule::IndentAlways)
+        fmtr.add_tags_to_rule(&["html", "body"], AutoFmtRule::IndentAlways)
             .unwrap();
-        assert_err!(fmtr.add_tags_to_rule(&["html", "head"], FixedRule::LfAlways));
-        fmtr.add_tags_to_rule(&["html", "body"], FixedRule::LfClosing)
+        assert_err!(fmtr.add_tags_to_rule(&["html", "head"], AutoFmtRule::LfAlways));
+        fmtr.add_tags_to_rule(&["html", "body"], AutoFmtRule::LfClosing)
             .unwrap();
         fmtr.reset_to_defaults();
 
-        fmtr.add_tags_to_rule(&["html", "body"], FixedRule::LfAlways)
+        fmtr.add_tags_to_rule(&["html", "body"], AutoFmtRule::LfAlways)
             .unwrap();
-        assert_err!(fmtr.add_tags_to_rule(&["html", "head"], FixedRule::IndentAlways));
-        assert_err!(fmtr.add_tags_to_rule(&["body", "header"], FixedRule::LfClosing));
+        assert_err!(fmtr.add_tags_to_rule(&["html", "head"], AutoFmtRule::IndentAlways));
+        assert_err!(fmtr.add_tags_to_rule(&["body", "header"], AutoFmtRule::LfClosing));
         fmtr.reset_to_defaults();
 
         // Now, test setup for the operational test cases.
-        fmtr.add_tags_to_rule(&["head", "body"], FixedRule::IndentAlways)
+        fmtr.add_tags_to_rule(&["html"], AutoFmtRule::LfAlways)
             .unwrap();
-        fmtr.add_tags_to_rule(&["html"], FixedRule::LfAlways)
+        fmtr.add_tags_to_rule(&["head", "body"], AutoFmtRule::IndentAlways)
             .unwrap();
-        fmtr.add_tags_to_rule(&["body", "div"], FixedRule::LfClosing)
+        fmtr.add_tags_to_rule(&["head", "body", "div"], AutoFmtRule::LfClosing)
             .unwrap();
 
         // Test: Auto-indenting combined with lf-always.
@@ -610,11 +660,11 @@ mod tests {
         );
         assert_eq!(
             fmtr.check(&SequenceState::open_self_closing("head", "link")),
-            INDENT_MORE
+            LF_INDENT_MORE
         );
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("link", "head")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(
             fmtr.check(&SequenceState::close_close("head", "html")),
@@ -626,13 +676,13 @@ mod tests {
         // <body><div>Text</div></body>
         assert_eq!(
             fmtr.check(&SequenceState::open_open("body", "div")),
-            INDENT_MORE
+            LF_INDENT_MORE
         );
         assert_eq!(fmtr.check(&SequenceState::open_text("div")), NOTHING);
         assert_eq!(fmtr.check(&SequenceState::text_close("div")), NOTHING);
         assert_eq!(
             fmtr.check(&SequenceState::close_close("div", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("body")), LINEFEED);
 
@@ -640,11 +690,11 @@ mod tests {
         // <body><img></body>
         assert_eq!(
             fmtr.check(&SequenceState::open_self_closing("body", "img")),
-            INDENT_MORE
+            LF_INDENT_MORE
         );
         assert_eq!(
             fmtr.check(&SequenceState::self_closing_close("img", "body")),
-            INDENT_LESS
+            LF_INDENT_LESS
         );
         assert_eq!(fmtr.check(&SequenceState::close_text("body")), LINEFEED);
     }

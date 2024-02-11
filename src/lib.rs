@@ -46,7 +46,7 @@
 //! you need to implement:
 //! ```
 //! use markupsth::{
-//!     AutoIndent, FixedRule, Language, MarkupSth, properties,
+//!     AutoIndent, AutoFmtRule, Language, MarkupSth, properties,
 //! };
 //!
 //! // Setup a document (String), MarkupSth and a default formatter.
@@ -54,11 +54,11 @@
 //! let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 //
 //! // Default Formatter is an AutoIndent, so get it, configure it!
-//! let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
-//! fmtr.add_tags_to_rule(&["head", "body", "section"], FixedRule::IndentAlways)
+//! let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
+//! fmtr.add_tags_to_rule(&["head", "body", "section"], AutoFmtRule::IndentAlways)
 //!     .unwrap();
-//! fmtr.add_tags_to_rule(&["html"], FixedRule::LfAlways).unwrap();
-//! fmtr.add_tags_to_rule(&["title", "link", "div", "p"], FixedRule::LfClosing)
+//! fmtr.add_tags_to_rule(&["html"], AutoFmtRule::LfAlways).unwrap();
+//! fmtr.add_tags_to_rule(&["title", "link", "div", "p"], AutoFmtRule::LfClosing)
 //!     .unwrap();
 //!
 //! // Generate the content of example shown above.
@@ -81,7 +81,7 @@
 //! mus.finalize().unwrap();
 //! # assert_eq!(document, markupsth::testfile("formatted_html_auto_indent.html"));
 //! ```
-//!
+//! 
 //! ### Readable XML
 //!
 //! To generate the following output:
@@ -101,7 +101,7 @@
 //! ```
 //! you have to implement:
 //! ```
-//! use markupsth::{AutoIndent, FixedRule, Language, MarkupSth, properties};
+//! use markupsth::{AutoIndent, AutoFmtRule, Language, MarkupSth, properties};
 //!
 //! let do_entry = |mus: &mut MarkupSth, name: &str| {
 //!     mus.open("entry").unwrap();
@@ -120,9 +120,9 @@
 //! let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 //!
 //! // Default Formatter is an AutoIndent, so get it, configure it!
-//! let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
-//! fmtr.add_tags_to_rule(&["directory", "entry"], FixedRule::IndentAlways).unwrap();
-//! fmtr.add_tags_to_rule(&["title", "keyword", "entrystext"], FixedRule::LfClosing).unwrap();
+//! let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
+//! fmtr.add_tags_to_rule(&["directory", "entry"], AutoFmtRule::IndentAlways).unwrap();
+//! fmtr.add_tags_to_rule(&["title", "keyword", "entrystext"], AutoFmtRule::LfClosing).unwrap();
 //!
 //! // Generate the content of example shown above.
 //! mus.open("directory").unwrap();
@@ -141,7 +141,7 @@ pub mod markupsth;
 pub mod syntax;
 
 pub use crate::{
-    format::{FixedRule, FixedRuleset, Formatter},
+    format::{AutoFmtRule, ExtAutoIndenting, Formatter},
     formatters::*,
     markupsth::MarkupSth,
     syntax::Language,
@@ -209,6 +209,7 @@ mod tests {
         let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 
         mus.set_formatter(Box::new(AlwaysIndentAlwaysLf::new()));
+
         mus.open("head").unwrap();
         mus.self_closing("meta").unwrap();
         properties!(mus, "charset", "utf-8").unwrap();
@@ -230,12 +231,12 @@ mod tests {
         let mut mus = MarkupSth::new(&mut document, Language::Html).unwrap();
 
         // Default Formatter is an AutoIndent, so get it, configure it!
-        let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
-        fmtr.add_tags_to_rule(&["head", "body", "section"], FixedRule::IndentAlways)
+        let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
+        fmtr.add_tags_to_rule(&["head", "body", "section"], AutoFmtRule::IndentAlways)
             .unwrap();
-        fmtr.add_tags_to_rule(&["html"], FixedRule::LfAlways)
+        fmtr.add_tags_to_rule(&["html"], AutoFmtRule::LfAlways)
             .unwrap();
-        fmtr.add_tags_to_rule(&["title", "link", "div", "p"], FixedRule::LfClosing)
+        fmtr.add_tags_to_rule(&["title", "link", "div", "p"], AutoFmtRule::LfClosing)
             .unwrap();
 
         mus.open("html").unwrap();
@@ -276,10 +277,10 @@ mod tests {
         let mut document = String::new();
         let mut mus = MarkupSth::new(&mut document, Language::Xml).unwrap();
         // Default Formatter is an AutoIndent, so get it, configure it!
-        let fmtr = mus.formatter.optional_fixed_ruleset().unwrap();
-        fmtr.add_tags_to_rule(&["directory", "entry"], FixedRule::IndentAlways)
+        let fmtr = mus.formatter.get_ext_auto_indenting().unwrap();
+        fmtr.add_tags_to_rule(&["directory", "entry"], AutoFmtRule::IndentAlways)
             .unwrap();
-        fmtr.add_tags_to_rule(&["title", "keyword", "entrystext"], FixedRule::LfClosing)
+        fmtr.add_tags_to_rule(&["title", "keyword", "entrystext"], AutoFmtRule::LfClosing)
             .unwrap();
 
         mus.open("directory").unwrap();
